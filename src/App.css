@@ -116,22 +116,49 @@ td span {
   line-height: 1.2;
 }
 
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 410px;
-  gap: 18px;
-  margin-top: 18px;
-  align-items: start;
-}
-
-.side-stack {
-  display: grid;
-  gap: 18px;
-}
-
 .admin-page {
   display: grid;
   gap: 18px;
+}
+
+.view-tabs {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 18px;
+  padding: 3px;
+  border: 1px solid #d8e3dc;
+  border-radius: 8px;
+  background: #edf5f0;
+}
+
+.view-tabs button {
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5c6b64;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.view-tabs button.active {
+  background: #ffffff;
+  color: #0c6d42;
+  box-shadow: 0 7px 18px rgba(22, 62, 39, 0.1);
+}
+
+.leaderboard-panel,
+.weekly-workspace {
+  margin-top: 18px;
+}
+
+.weekly-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 430px;
+  gap: 18px;
+  align-items: start;
 }
 
 .login-panel {
@@ -153,7 +180,8 @@ td span {
 }
 
 .leaderboard-panel,
-.recent-panel {
+.recent-panel,
+.weekly-panel {
   overflow: hidden;
 }
 
@@ -538,8 +566,7 @@ legend {
 }
 
 input,
-select,
-textarea {
+select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #cfdad3;
@@ -556,14 +583,8 @@ select {
   padding: 0 11px;
 }
 
-textarea {
-  resize: vertical;
-  padding: 11px;
-}
-
 input:focus,
-select:focus,
-textarea:focus {
+select:focus {
   border-color: #15935c;
   box-shadow: 0 0 0 3px rgba(21, 147, 92, 0.14);
 }
@@ -664,16 +685,6 @@ textarea:focus {
   flex: 0 0 84px;
 }
 
-.full-width {
-  width: calc(100% - 36px);
-  margin: 12px 18px 18px;
-}
-
-.panel textarea {
-  width: calc(100% - 36px);
-  margin: 16px 18px 0;
-}
-
 .recent-panel {
   margin-top: 18px;
 }
@@ -695,6 +706,136 @@ textarea:focus {
 .weekly-table td,
 .weekly-table th {
   padding-inline: 14px;
+}
+
+.weekly-detail-panel {
+  overflow: hidden;
+  position: sticky;
+  top: 18px;
+}
+
+.weekly-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid #e0ebe5;
+  background:
+    linear-gradient(135deg, rgba(16, 137, 83, 0.08), rgba(200, 243, 109, 0.09)),
+    #ffffff;
+}
+
+.weekly-detail-head h2,
+.empty-weekly-detail h2 {
+  margin: 4px 0 5px;
+  color: #10241a;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.weekly-detail-head p,
+.empty-weekly-detail p {
+  margin: 0;
+  color: #63736b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.weekly-detail-head > strong {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(16, 137, 83, 0.18);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0c6d42;
+  font-size: 22px;
+}
+
+.weekly-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: #e3ece6;
+  border-bottom: 1px solid #e3ece6;
+}
+
+.weekly-detail-metrics div {
+  padding: 12px;
+  background: #fbfdfb;
+}
+
+.weekly-detail-metrics span {
+  display: block;
+  margin-bottom: 5px;
+  color: #66736d;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.weekly-detail-metrics strong {
+  color: #17261f;
+  font-size: 16px;
+}
+
+.weekly-games-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.weekly-game-card {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid #e1eae5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.weekly-game-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weekly-game-card p,
+.weekly-game-card small {
+  margin: 0;
+  color: #52625a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.weekly-game-card b {
+  color: #17261f;
+}
+
+.result-win,
+.result-loss {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.result-win {
+  background: #e7f7ef;
+  color: #087443;
+}
+
+.result-loss {
+  background: #fdf1f0;
+  color: #b42318;
+}
+
+.empty-weekly-detail {
+  padding: 18px;
 }
 
 .empty-table {
@@ -767,10 +908,14 @@ textarea:focus {
     padding: 20px;
   }
 
-  .workspace,
+  .weekly-workspace,
   .admin-grid,
   .results-grid {
     grid-template-columns: 1fr;
+  }
+
+  .weekly-detail-panel {
+    position: static;
   }
 
   .summary-strip {

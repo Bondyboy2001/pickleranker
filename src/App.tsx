@@ -7,7 +7,6 @@ import {
   Plus,
   Save,
   Trophy,
-  Upload,
   Users,
 } from 'lucide-react'
 import './App.css'
@@ -72,6 +71,17 @@ type WeeklyStanding = {
   games: number
   pointsFor: number
   pointsAgainst: number
+}
+
+type WeeklyPlayerGame = {
+  id: string
+  week: string
+  playedOn: string
+  teamLabel: string
+  opponentLabel: string
+  scoreLabel: string
+  result: 'Win' | 'Loss'
+  ratingChange: number
 }
 
 type WeeklySnapshot = {
@@ -390,6 +400,43 @@ function buildWeeklyStandings(
   )
 }
 
+function buildWeeklyPlayerGames(
+  playerId: string,
+  selectedWeek: string,
+  summaries: MatchSummary[],
+  playerName: (id: string) => string,
+) {
+  return [...summaries]
+    .reverse()
+    .filter(
+      (match) =>
+        match.playedOn === selectedWeek &&
+        (match.teamA.includes(playerId) || match.teamB.includes(playerId)),
+    )
+    .map<WeeklyPlayerGame>((match) => {
+      const team = match.teamA.includes(playerId) ? 'A' : 'B'
+      const teamIds = team === 'A' ? match.teamA : match.teamB
+      const opponentIds = team === 'A' ? match.teamB : match.teamA
+      const teamScore = team === 'A' ? match.scoreA : match.scoreB
+      const opponentScore = team === 'A' ? match.scoreB : match.scoreA
+      const ratingChange = team === 'A' ? match.teamADelta : match.teamBDelta
+
+      return {
+        id: match.id,
+        week: match.week,
+        playedOn: match.playedOn,
+        teamLabel: teamIds
+          .filter((teamPlayerId) => teamPlayerId !== playerId)
+          .map(playerName)
+          .join(' / '),
+        opponentLabel: opponentIds.map(playerName).join(' / '),
+        scoreLabel: `${teamScore}-${opponentScore}`,
+        result: match.winner === team ? 'Win' : 'Loss',
+        ratingChange,
+      }
+    })
+}
+
 function loadData(): AppData {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (!stored) return seededData
@@ -479,7 +526,13 @@ function App() {
   const [authForm, setAuthForm] = useState({ email: '', password: '' })
   const [authError, setAuthError] = useState('')
   const [isLoadingRemote, setIsLoadingRemote] = useState(isSupabaseConfigured)
+  const [activePublicTab, setActivePublicTab] = useState<'overall' | 'weekly'>(
+    'overall',
+  )
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  const [selectedWeeklyPlayerId, setSelectedWeeklyPlayerId] = useState<string | null>(
+    null,
+  )
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'rank',
     direction: 'asc',
@@ -490,7 +543,6 @@ function App() {
   }))
   const [matchError, setMatchError] = useState('')
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
-  const [importText, setImportText] = useState('')
   const [search, setSearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
   const [notice, setNotice] = useState(
@@ -562,6 +614,26 @@ function App() {
       player.name.toLowerCase().includes(query),
     )
   }, [search, sortedStandings])
+  const weeklyPlayerGames = useMemo(
+    () =>
+      selectedWeeklyPlayerId
+        ? buildWeeklyPlayerGames(
+            selectedWeeklyPlayerId,
+            activeWeek,
+            summaries,
+            (id) => data.players.find((player) => player.id === id)?.name ?? 'Unknown',
+          )
+        : [],
+    [activeWeek, data.players, selectedWeeklyPlayerId, summaries],
+  )
+  const selectedWeeklySnapshotPlayer = activeWeeklySnapshot?.players.find(
+    (player) => player.playerId === selectedWeeklyPlayerId,
+  )
+  const selectedWeeklyComputedPlayer = weeklyStandings.find(
+    (player) => player.playerId === selectedWeeklyPlayerId,
+  )
+  const selectedWeeklyPlayerName =
+    selectedWeeklySnapshotPlayer?.name ?? selectedWeeklyComputedPlayer?.name ?? ''
 
   function persist(nextData: AppData, message: string) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData))
@@ -741,77 +813,6 @@ function App() {
     setNotice('Backup downloaded and copied to clipboard as JSON.')
   }
 
-  async function importCsv() {
-    if (!requireAdmin()) return
-    const rows = importText
-      .split('\n')
-      .map((row) => row.trim())
-      .filter(Boolean)
-
-    const nextPlayers = [...data.players]
-    const nextMatches: Match[] = []
-
-    rows.forEach((row) => {
-      const [week, playedOn, a1, a2, b1, b2, scoreA, scoreB] = row
-        .split(',')
-        .map((cell) => cell.trim())
-      if (!week || !playedOn || !a1 || !a2 || !b1 || !b2 || !scoreA || !scoreB) {
-        return
-      }
-
-      const getPlayerId = (name: string) => {
-        const existing = nextPlayers.find(
-          (player) => player.name.toLowerCase() === name.toLowerCase(),
-        )
-        if (existing) return existing.id
-        const player = { id: makeId('p'), name, skillLevel: 3.0 }
-        nextPlayers.push(player)
-        return player.id
-      }
-
-      nextMatches.push({
-        id: makeId('m'),
-        week,
-        playedOn,
-        teamA: [getPlayerId(a1), getPlayerId(a2)],
-        teamB: [getPlayerId(b1), getPlayerId(b2)],
-        scoreA: Number(scoreA),
-        scoreB: Number(scoreB),
-      })
-    })
-
-    if (nextMatches.length === 0) {
-      setNotice('No valid CSV rows found.')
-      return
-    }
-
-    const nextData = { players: nextPlayers, matches: [...data.matches, ...nextMatches] }
-
-    if (supabase) {
-      const newPlayers = nextPlayers.filter(
-        (player) => !data.players.some((existing) => existing.id === player.id),
-      )
-      if (newPlayers.length > 0) {
-        const { error } = await supabase.from('players').insert(newPlayers.map(playerToDb))
-        if (error) {
-          setNotice(error.message)
-          return
-        }
-      }
-      const { error } = await supabase.from('matches').insert(nextMatches.map(matchToDb))
-      if (error) {
-        setNotice(error.message)
-        return
-      }
-    }
-
-    persist(
-      nextData,
-      `${nextMatches.length} previous score${nextMatches.length === 1 ? '' : 's'} imported.`,
-    )
-    setImportText('')
-  }
-
   const playerName = (id: string) =>
     data.players.find((player) => player.id === id)?.name ?? 'Unknown'
 
@@ -848,8 +849,6 @@ function App() {
           authError={authError}
           canEdit={canEdit}
           data={data}
-          importCsv={importCsv}
-          importText={importText}
           isSupabaseConfigured={isSupabaseConfigured}
           matchError={matchError}
           matchForm={matchForm}
@@ -857,7 +856,6 @@ function App() {
           resetSeedData={resetSeedData}
           session={session}
           setAuthForm={setAuthForm}
-          setImportText={setImportText}
           setMatchError={setMatchError}
           setMatchForm={setMatchForm}
           setPlayerForm={setPlayerForm}
@@ -899,246 +897,151 @@ function App() {
             </div>
           </section>
 
-          <div className="workspace">
-            <section className="panel leaderboard-panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>Leaderboard</h2>
-                  <p>Overall 4DR leaderboard. Click a player for rating history.</p>
-                </div>
-                <input
-                  type="search"
-                  className="search-input"
-                  placeholder="Find player..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  aria-label="Find player"
-                />
-              </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <SortableHeader
-                        label="#"
-                        sortKey="rank"
-                        activeSort={sort}
-                        onSort={toggleSort}
-                      />
-                      <SortableHeader
-                        label="Player"
-                        sortKey="player"
-                        activeSort={sort}
-                        onSort={toggleSort}
-                      />
-                      <SortableHeader
-                        label="4DR"
-                        sortKey="rating"
-                        activeSort={sort}
-                        onSort={toggleSort}
-                      />
-                      <SortableHeader
-                        label="W-L"
-                        sortKey="record"
-                        activeSort={sort}
-                        onSort={toggleSort}
-                      />
-                      <SortableHeader
-                        label="Games"
-                        sortKey="games"
-                        activeSort={sort}
-                        onSort={toggleSort}
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStandings.map((player) => {
-                      const isSelected = selectedPlayerId === player.id
-                      const playerWeeks = isSelected
-                        ? buildPlayerWeekPoints(
-                            player.id,
-                            summaries,
-                            sourceWeeklySnapshots,
-                          )
-                        : []
-                      const rank = rankByPlayerId.get(player.id) ?? 0
+          <div className="view-tabs" role="tablist" aria-label="Leaderboard views">
+            <button
+              type="button"
+              className={activePublicTab === 'overall' ? 'active' : ''}
+              onClick={() => setActivePublicTab('overall')}
+            >
+              Overall leaderboard
+            </button>
+            <button
+              type="button"
+              className={activePublicTab === 'weekly' ? 'active' : ''}
+              onClick={() => setActivePublicTab('weekly')}
+            >
+              Weekly leaderboard
+            </button>
+          </div>
 
-                      return (
-                        <Fragment key={player.id}>
-                          <tr
-                            className={isSelected ? 'selected-row' : ''}
-                            tabIndex={0}
-                            onClick={() =>
-                              setSelectedPlayerId((current) =>
-                                current === player.id ? null : player.id,
-                              )
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
+          {activePublicTab === 'overall' ? (
+            <>
+              <section className="panel leaderboard-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Leaderboard</h2>
+                    <p>Overall 4DR leaderboard. Click a player for rating history.</p>
+                  </div>
+                  <input
+                    type="search"
+                    className="search-input"
+                    placeholder="Find player..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    aria-label="Find player"
+                  />
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <SortableHeader
+                          label="#"
+                          sortKey="rank"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableHeader
+                          label="Player"
+                          sortKey="player"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableHeader
+                          label="4DR"
+                          sortKey="rating"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableHeader
+                          label="W-L"
+                          sortKey="record"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableHeader
+                          label="Games"
+                          sortKey="games"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStandings.map((player) => {
+                        const isSelected = selectedPlayerId === player.id
+                        const playerWeeks = isSelected
+                          ? buildPlayerWeekPoints(
+                              player.id,
+                              summaries,
+                              sourceWeeklySnapshots,
+                            )
+                          : []
+                        const rank = rankByPlayerId.get(player.id) ?? 0
+
+                        return (
+                          <Fragment key={player.id}>
+                            <tr
+                              className={isSelected ? 'selected-row' : ''}
+                              tabIndex={0}
+                              onClick={() =>
                                 setSelectedPlayerId((current) =>
                                   current === player.id ? null : player.id,
                                 )
                               }
-                            }}
-                          >
-                            <td
-                              className={`rank-cell rank-pos-${
-                                rank <= 3 ? rank : 'other'
-                              }`}
-                            >
-                              {rank}
-                            </td>
-                            <td>
-                              <strong>{player.name}</strong>
-                            </td>
-                            <td className="rating-cell">
-                              {formatRating(player.rating)}
-                            </td>
-                            <td>
-                              {player.wins}-{player.losses}
-                            </td>
-                            <td>{player.games}</td>
-                          </tr>
-                          {isSelected ? (
-                            <tr className="expanded-row">
-                              <td colSpan={LEADERBOARD_COLUMN_COUNT}>
-                                <PlayerDetailPanel player={player} weeks={playerWeeks} />
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      )
-                    })}
-                    {filteredStandings.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={LEADERBOARD_COLUMN_COUNT}
-                          className="empty-table"
-                        >
-                          No players match "{search.trim()}".
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="panel weekly-panel">
-              <div className="panel-heading weekly-heading">
-                <div>
-                  <h2>Weekly leaderboard</h2>
-                  <p>
-                    {activeWeeklySnapshot
-                      ? 'Active 4DR ranking list and position movement for this week.'
-                      : 'Ranks players by 4DR points gained in the selected week.'}
-                  </p>
-                </div>
-                <select
-                  className="week-select"
-                  value={activeWeek}
-                  onChange={(event) => setSelectedWeek(event.target.value)}
-                  aria-label="Select week"
-                >
-                  {weekOptions.map((week) => (
-                    <option key={week.key} value={week.key}>
-                      {week.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="table-wrap">
-                <table className="weekly-table">
-                  <thead>
-                    {activeWeeklySnapshot ? (
-                      <tr>
-                        <th>Rank</th>
-                        <th>Player</th>
-                        <th>4DR</th>
-                        <th>POS +/-</th>
-                      </tr>
-                    ) : (
-                      <tr>
-                        <th>Rank</th>
-                        <th>Player</th>
-                        <th>Weekly +/-</th>
-                        <th>W-L</th>
-                      </tr>
-                    )}
-                  </thead>
-                  <tbody>
-                    {activeWeeklySnapshot
-                      ? activeWeeklySnapshot.players.map((player) => (
-                          <tr key={player.playerId}>
-                            <td className="rank-cell">{player.rank}</td>
-                            <td>
-                              <strong>{player.name}</strong>
-                            </td>
-                            <td className="rating-cell">
-                              {formatRating(player.rating)}
-                            </td>
-                            <td>
-                              <span
-                                className={
-                                  player.movement.startsWith('+')
-                                    ? 'movement positive'
-                                    : player.movement.startsWith('-')
-                                      ? 'movement negative'
-                                      : 'movement'
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault()
+                                  setSelectedPlayerId((current) =>
+                                    current === player.id ? null : player.id,
+                                  )
                                 }
-                              >
-                                {player.movement}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      : weeklyStandings.map((player, index) => {
-                      const pointDifference = player.pointsFor - player.pointsAgainst
-
-                      return (
-                        <tr key={player.playerId}>
-                          <td className="rank-cell">{index + 1}</td>
-                          <td>
-                            <strong>{player.name}</strong>
-                            <span>
-                              {player.games} game{player.games === 1 ? '' : 's'} |
-                              point {pointDifference >= 0 ? '+' : ''}
-                              {pointDifference}
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className={
-                                player.change >= 0
-                                  ? 'movement positive'
-                                  : 'movement negative'
-                              }
+                              }}
                             >
-                              {player.change >= 0 ? '+' : ''}
-                              {player.change.toFixed(3)}
-                            </span>
-                          </td>
-                          <td>
-                            {player.wins}-{player.losses}
+                              <td
+                                className={`rank-cell rank-pos-${
+                                  rank <= 3 ? rank : 'other'
+                                }`}
+                              >
+                                {rank}
+                              </td>
+                              <td>
+                                <strong>{player.name}</strong>
+                              </td>
+                              <td className="rating-cell">
+                                {formatRating(player.rating)}
+                              </td>
+                              <td>
+                                {player.wins}-{player.losses}
+                              </td>
+                              <td>{player.games}</td>
+                            </tr>
+                            {isSelected ? (
+                              <tr className="expanded-row">
+                                <td colSpan={LEADERBOARD_COLUMN_COUNT}>
+                                  <PlayerDetailPanel player={player} weeks={playerWeeks} />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })}
+                      {filteredStandings.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={LEADERBOARD_COLUMN_COUNT}
+                            className="empty-table"
+                          >
+                            No players match "{search.trim()}".
                           </td>
                         </tr>
-                      )
-                    })}
-                    {!activeWeeklySnapshot && weeklyStandings.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="empty-table">
-                          No games found for this week.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
 
-          <section className="panel recent-panel">
+              <section className="panel recent-panel">
             <div className="panel-heading">
               <div>
                 <h2>Recent results</h2>
@@ -1181,6 +1084,166 @@ function App() {
               ))}
             </div>
           </section>
+            </>
+          ) : (
+            <div className="weekly-workspace">
+              <section className="panel weekly-panel">
+                <div className="panel-heading weekly-heading">
+                  <div>
+                    <h2>Weekly leaderboard</h2>
+                    <p>
+                      {activeWeeklySnapshot
+                        ? 'Active 4DR ranking list and position movement for this week.'
+                        : 'Ranks players by 4DR points gained in the selected week.'}
+                    </p>
+                  </div>
+                  <select
+                    className="week-select"
+                    value={activeWeek}
+                    onChange={(event) => {
+                      setSelectedWeek(event.target.value)
+                      setSelectedWeeklyPlayerId(null)
+                    }}
+                    aria-label="Select week"
+                  >
+                    {weekOptions.map((week) => (
+                      <option key={week.key} value={week.key}>
+                        {week.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="table-wrap">
+                  <table className="weekly-table">
+                    <thead>
+                      {activeWeeklySnapshot ? (
+                        <tr>
+                          <th>Rank</th>
+                          <th>Player</th>
+                          <th>4DR</th>
+                          <th>POS +/-</th>
+                        </tr>
+                      ) : (
+                        <tr>
+                          <th>Rank</th>
+                          <th>Player</th>
+                          <th>Weekly +/-</th>
+                          <th>W-L</th>
+                        </tr>
+                      )}
+                    </thead>
+                    <tbody>
+                      {activeWeeklySnapshot
+                        ? activeWeeklySnapshot.players.map((player) => (
+                            <tr
+                              key={player.playerId}
+                              className={
+                                selectedWeeklyPlayerId === player.playerId
+                                  ? 'selected-row'
+                                  : ''
+                              }
+                              tabIndex={0}
+                              onClick={() => setSelectedWeeklyPlayerId(player.playerId)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault()
+                                  setSelectedWeeklyPlayerId(player.playerId)
+                                }
+                              }}
+                            >
+                              <td className="rank-cell">{player.rank}</td>
+                              <td>
+                                <strong>{player.name}</strong>
+                              </td>
+                              <td className="rating-cell">
+                                {formatRating(player.rating)}
+                              </td>
+                              <td>
+                                <span
+                                  className={
+                                    player.movement.startsWith('+')
+                                      ? 'movement positive'
+                                      : player.movement.startsWith('-')
+                                        ? 'movement negative'
+                                        : 'movement'
+                                  }
+                                >
+                                  {player.movement}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        : weeklyStandings.map((player, index) => {
+                            const pointDifference =
+                              player.pointsFor - player.pointsAgainst
+
+                            return (
+                              <tr
+                                key={player.playerId}
+                                className={
+                                  selectedWeeklyPlayerId === player.playerId
+                                    ? 'selected-row'
+                                    : ''
+                                }
+                                tabIndex={0}
+                                onClick={() =>
+                                  setSelectedWeeklyPlayerId(player.playerId)
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    setSelectedWeeklyPlayerId(player.playerId)
+                                  }
+                                }}
+                              >
+                                <td className="rank-cell">{index + 1}</td>
+                                <td>
+                                  <strong>{player.name}</strong>
+                                  <span>
+                                    {player.games} game
+                                    {player.games === 1 ? '' : 's'} | point{' '}
+                                    {pointDifference >= 0 ? '+' : ''}
+                                    {pointDifference}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span
+                                    className={
+                                      player.change >= 0
+                                        ? 'movement positive'
+                                        : 'movement negative'
+                                    }
+                                  >
+                                    {player.change >= 0 ? '+' : ''}
+                                    {player.change.toFixed(3)}
+                                  </span>
+                                </td>
+                                <td>
+                                  {player.wins}-{player.losses}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                      {!activeWeeklySnapshot && weeklyStandings.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="empty-table">
+                            No games found for this week.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <WeeklyPlayerDetail
+                games={weeklyPlayerGames}
+                playerName={selectedWeeklyPlayerName}
+                snapshotPlayer={selectedWeeklySnapshotPlayer}
+                computedPlayer={selectedWeeklyComputedPlayer}
+              />
+            </div>
+          )}
         </>
       )}
     </main>
@@ -1192,8 +1255,6 @@ function AdminPage({
   authError,
   canEdit,
   data,
-  importCsv,
-  importText,
   isSupabaseConfigured,
   matchError,
   matchForm,
@@ -1201,7 +1262,6 @@ function AdminPage({
   resetSeedData,
   session,
   setAuthForm,
-  setImportText,
   setMatchError,
   setMatchForm,
   setPlayerForm,
@@ -1215,8 +1275,6 @@ function AdminPage({
   authError: string
   canEdit: boolean
   data: AppData
-  importCsv: () => void
-  importText: string
   isSupabaseConfigured: boolean
   matchError: string
   matchForm: typeof emptyMatch
@@ -1224,7 +1282,6 @@ function AdminPage({
   resetSeedData: () => void
   session: Session | null
   setAuthForm: (value: { email: string; password: string }) => void
-  setImportText: (value: string) => void
   setMatchError: (value: string) => void
   setMatchForm: (value: typeof emptyMatch) => void
   setPlayerForm: (value: { name: string; skillLevel: string }) => void
@@ -1290,6 +1347,7 @@ function AdminPage({
         )}
       </section>
 
+      {canEdit ? (
       <div className="admin-grid">
         <section className="panel">
           <div className="panel-heading">
@@ -1431,30 +1489,6 @@ function AdminPage({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Import previous weeks</h2>
-              <p>CSV: week,date,A1,A2,B1,B2,scoreA,scoreB</p>
-            </div>
-          </div>
-          <textarea
-            rows={4}
-            value={importText}
-            placeholder="Week 1,2026-05-21,Ava,Ben,Cara,Dan,11,7"
-            onChange={(event) => setImportText(event.target.value)}
-          />
-          <button
-            type="button"
-            className="ghost-button full-width"
-            onClick={importCsv}
-            disabled={!canEdit}
-          >
-            <Upload size={16} />
-            Import scores
-          </button>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
               <h2>Maintenance</h2>
               <p>Backup or reset the Cardiff seed data.</p>
             </div>
@@ -1474,7 +1508,115 @@ function AdminPage({
           </div>
         </section>
       </div>
+      ) : null}
     </section>
+  )
+}
+
+function WeeklyPlayerDetail({
+  games,
+  playerName,
+  snapshotPlayer,
+  computedPlayer,
+}: {
+  games: WeeklyPlayerGame[]
+  playerName: string
+  snapshotPlayer?: WeeklySnapshot['players'][number]
+  computedPlayer?: WeeklyStanding
+}) {
+  const wins = games.filter((game) => game.result === 'Win').length
+  const losses = games.length - wins
+  const pointsFor = games.reduce(
+    (total, game) => total + Number(game.scoreLabel.split('-')[0]),
+    0,
+  )
+  const pointsAgainst = games.reduce(
+    (total, game) => total + Number(game.scoreLabel.split('-')[1]),
+    0,
+  )
+  const totalChange = roundRating(
+    games.reduce((total, game) => total + game.ratingChange, 0),
+  )
+
+  if (!playerName) {
+    return (
+      <aside className="panel weekly-detail-panel empty-weekly-detail">
+        <h2>Weekly player overview</h2>
+        <p>Select a player in the weekly leaderboard to see their games.</p>
+      </aside>
+    )
+  }
+
+  return (
+    <aside className="panel weekly-detail-panel">
+      <div className="weekly-detail-head">
+        <div>
+          <span className="eyebrow">Weekly player overview</span>
+          <h2>{playerName}</h2>
+          <p>
+            {games.length} game{games.length === 1 ? '' : 's'} this week
+          </p>
+        </div>
+        {snapshotPlayer ? (
+          <strong>{formatRating(snapshotPlayer.rating)}</strong>
+        ) : computedPlayer ? (
+          <strong>
+            {computedPlayer.change >= 0 ? '+' : ''}
+            {computedPlayer.change.toFixed(3)}
+          </strong>
+        ) : null}
+      </div>
+
+      <div className="weekly-detail-metrics">
+        <div>
+          <span>Record</span>
+          <strong>
+            {wins}-{losses}
+          </strong>
+        </div>
+        <div>
+          <span>Points</span>
+          <strong>
+            {pointsFor}-{pointsAgainst}
+          </strong>
+        </div>
+        <div>
+          <span>4DR move</span>
+          <strong className={totalChange >= 0 ? 'positive' : 'negative'}>
+            {totalChange >= 0 ? '+' : ''}
+            {totalChange.toFixed(3)}
+          </strong>
+        </div>
+      </div>
+
+      <div className="weekly-games-list">
+        {games.map((game) => (
+          <article className="weekly-game-card" key={game.id}>
+            <div>
+              <span className={game.result === 'Win' ? 'result-win' : 'result-loss'}>
+                {game.result}
+              </span>
+              <strong>{game.scoreLabel}</strong>
+            </div>
+            <p>
+              <b>With</b> {game.teamLabel}
+            </p>
+            <p>
+              <b>Against</b> {game.opponentLabel}
+            </p>
+            <small>
+              4DR {game.ratingChange >= 0 ? '+' : ''}
+              {game.ratingChange.toFixed(3)}
+            </small>
+          </article>
+        ))}
+        {games.length === 0 ? (
+          <div className="empty-table">
+            No game details were found for this player in the selected week.
+          </div>
+        ) : null}
+      </div>
+    </aside>
   )
 }
 
