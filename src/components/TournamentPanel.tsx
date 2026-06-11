@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Flag, Trophy, Users, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Flag, Plus, Search, Trophy, X } from 'lucide-react'
 import { formatResultsLabel, makeId } from '../lib/data'
 import {
   buildNextRound,
@@ -39,6 +39,13 @@ export function TournamentPanel({
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Autocomplete state
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (typeof localStorage === 'undefined') return
     if (tournament) {
@@ -54,19 +61,32 @@ export function TournamentPanel({
   )
   const nameOf = (playerId: string) => playerNameById.get(playerId) ?? 'Unknown'
 
-  // Seed attendees by current leaderboard order (standings are rating-sorted).
   const seededSelection = useMemo(
     () => standings.filter((player) => selectedIds.includes(player.id)).map((player) => player.id),
     [selectedIds, standings],
   )
 
-  function togglePlayer(playerId: string) {
+  const availablePlayers = useMemo(
+    () =>
+      standings.filter(
+        (player) =>
+          !selectedIds.includes(player.id) &&
+          player.name.toLowerCase().includes(query.trim().toLowerCase()),
+      ),
+    [standings, selectedIds, query],
+  )
+
+  function addPlayer(playerId: string) {
     setFormError('')
-    setSelectedIds((current) =>
-      current.includes(playerId)
-        ? current.filter((id) => id !== playerId)
-        : [...current, playerId],
-    )
+    setQuery('')
+    setSelectedIds((current) => (current.includes(playerId) ? current : [...current, playerId]))
+    setOpen(false)
+    setHighlightIndex(0)
+    inputRef.current?.focus()
+  }
+
+  function removePlayer(playerId: string) {
+    setSelectedIds((current) => current.filter((id) => id !== playerId))
   }
 
   function startTournament() {
@@ -144,7 +164,41 @@ export function TournamentPanel({
     setTournament(null)
     setSelectedIds([])
     setFormError('')
+    setQuery('')
+    setOpen(false)
   }
+
+  function handleInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setOpen(true)
+      setHighlightIndex((i) => Math.min(i + 1, availablePlayers.length - 1))
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlightIndex((i) => Math.max(i - 1, 0))
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      const player = availablePlayers[highlightIndex]
+      if (player) {
+        addPlayer(player.id)
+      }
+    } else if (event.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!open) return
+    function onClick(event: MouseEvent) {
+      const target = event.target as Node
+      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
 
   if (!tournament) {
     const courtCount = Math.floor(seededSelection.length / 4)
@@ -156,9 +210,8 @@ export function TournamentPanel({
           <div>
             <h2>Tournament setup</h2>
             <p>
-              Tick everyone who has turned up. Players are seeded by current rating: the top 4 share
-              court 1, the next 4 court 2, and so on. Each court plays 3 games rotating partners,
-              then the top 2 move up a court and the bottom 2 move down.
+              Search players by name, add them to the list, then generate round 1. Players are
+              seeded by current rating: the top 4 share court 1, the next 4 court 2, and so on.
             </p>
           </div>
         </div>
@@ -173,7 +226,6 @@ export function TournamentPanel({
             />
           </label>
           <div className="tournament-setup-summary">
-            <Users size={16} />
             <span>
               {seededSelection.length} selected · {courtCount} court{courtCount === 1 ? '' : 's'}
               {sitOutCount > 0 ? ` · ${sitOutCount} sitting out each round` : ''}
@@ -181,24 +233,83 @@ export function TournamentPanel({
           </div>
         </div>
 
-        <div className="player-pick-grid" role="group" aria-label="Players who turned up">
-          {standings.map((player) => {
-            const checked = selectedIds.includes(player.id)
-            return (
-              <label key={player.id} className={checked ? 'player-pick checked' : 'player-pick'}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => togglePlayer(player.id)}
-                />
-                <span>{player.name}</span>
-              </label>
-            )
-          })}
-          {standings.length === 0 ? (
-            <p className="empty-table">No players yet. Add players first.</p>
+        <div className="player-autocomplete">
+          <div className="autocomplete-input-wrap">
+            <Search size={16} />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Type a player name..."
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value)
+                setOpen(true)
+                setHighlightIndex(0)
+              }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={handleInputKeyDown}
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-expanded={open}
+              aria-controls={open ? 'player-suggestions' : undefined}
+              aria-activedescendant={open ? `suggestion-${highlightIndex}` : undefined}
+            />
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Add player"
+              onClick={() => {
+                const player = availablePlayers[0]
+                if (player) addPlayer(player.id)
+              }}
+              disabled={availablePlayers.length === 0}
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+
+          {open && availablePlayers.length > 0 ? (
+            <div ref={listRef} className="autocomplete-dropdown" id="player-suggestions" role="listbox">
+              {availablePlayers.map((player, index) => (
+                <div
+                  key={player.id}
+                  id={`suggestion-${index}`}
+                  className={index === highlightIndex ? 'suggestion-highlight' : ''}
+                  role="option"
+                  aria-selected={index === highlightIndex}
+                  onMouseEnter={() => setHighlightIndex(index)}
+                  onClick={() => addPlayer(player.id)}
+                >
+                  {player.name}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {open && query.trim() && availablePlayers.length === 0 ? (
+            <div className="autocomplete-dropdown empty">
+              No players match “{query.trim()}”
+            </div>
           ) : null}
         </div>
+
+        {selectedIds.length > 0 ? (
+          <div className="selected-player-chips" role="list" aria-label="Selected players">
+            {selectedIds.map((playerId) => (
+              <span key={playerId} className="player-chip" role="listitem">
+                <span>{nameOf(playerId)}</span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`Remove ${nameOf(playerId)}`}
+                  onClick={() => removePlayer(playerId)}
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {formError ? <p className="form-error">{formError}</p> : null}
         <div className="form-actions">
