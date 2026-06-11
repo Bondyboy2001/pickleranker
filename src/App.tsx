@@ -9,7 +9,6 @@ import {
   Plus,
   Save,
   Search,
-  SlidersHorizontal,
   Sun,
   Trophy,
 } from 'lucide-react'
@@ -1257,10 +1256,6 @@ function App() {
                       aria-label="Search players"
                     />
                   </label>
-                  <button type="button" className="toolbar-select">
-                    <SlidersHorizontal size={16} />
-                    All Players
-                  </button>
                 </div>
                 <div className="table-wrap">
                   <table className="leaderboard-table">
