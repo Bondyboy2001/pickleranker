@@ -56,6 +56,8 @@ import type { Session } from '@supabase/supabase-js'
 
 const THEME_STORAGE_KEY = 'pickleranker-theme'
 const LEADERBOARD_COLUMN_COUNT = 7
+const ADMIN_USERNAME = 'ben'
+const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
 const emptyMatch: MatchFormState = {
   playedOn: new Date().toISOString().slice(0, 10),
@@ -88,7 +90,7 @@ function App() {
   )
   const [session, setSession] = useState<Session | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [authForm, setAuthForm] = useState({ email: '', password: '' })
+  const [authForm, setAuthForm] = useState({ username: '', password: '' })
   const [authError, setAuthError] = useState('')
   const [notice, setNotice] = useState('')
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>(
@@ -265,15 +267,20 @@ function App() {
     event.preventDefault()
     if (!supabase) return
     setAuthError('')
+    const username = authForm.username.trim().toLowerCase()
+    if (username !== ADMIN_USERNAME) {
+      setAuthError('Invalid username or password.')
+      return
+    }
     const { error } = await supabase.auth.signInWithPassword({
-      email: authForm.email.trim(),
+      email: ADMIN_AUTH_EMAIL,
       password: authForm.password,
     })
     if (error) {
-      setAuthError(error.message)
+      setAuthError('Invalid username or password.')
       return
     }
-    setAuthForm({ email: '', password: '' })
+    setAuthForm({ username: '', password: '' })
     const admin = await checkIsAdmin()
     setIsAdmin(admin)
     setNotice(admin ? 'Admin signed in.' : 'Signed in, but this account is not an admin.')
@@ -763,7 +770,7 @@ function AdminPage({
   startEditMatch,
   deleteMatch,
 }: {
-  authForm: { email: string; password: string }
+  authForm: { username: string; password: string }
   authError: string
   canEdit: boolean
   data: AppData
@@ -776,7 +783,7 @@ function AdminPage({
   playerNameById: Map<string, string>
   recentMatches: Match[]
   session: Session | null
-  setAuthForm: (value: { email: string; password: string }) => void
+  setAuthForm: (value: { username: string; password: string }) => void
   setMatchError: (value: string) => void
   setMatchForm: (value: MatchFormState) => void
   setPlayerForm: (value: { name: string; skillLevel: string }) => void
@@ -805,7 +812,7 @@ function AdminPage({
                   ? isAdmin
                     ? 'Signed in as admin. Updates save online.'
                     : 'Signed in, but this account is not listed as an admin.'
-                  : 'Sign in to update games and players.'
+                  : 'Sign in with username ben to update games and players.'
                 : 'Supabase is not configured, so local admin mode is enabled on this device.'}
             </p>
           </div>
@@ -813,7 +820,7 @@ function AdminPage({
         {isSupabaseConfigured ? (
           session ? (
             <div className="admin-status">
-              <span>{session.user.email}</span>
+              <span>{isAdmin ? ADMIN_USERNAME : session.user.email}</span>
               <button type="button" className="ghost-button" onClick={signOut}>
                 <LogOut size={16} />
                 Sign out
@@ -822,11 +829,11 @@ function AdminPage({
           ) : (
             <form className="admin-form" onSubmit={signIn}>
               <input
-                type="email"
-                placeholder="Email"
+                type="text"
+                placeholder="Username"
                 autoComplete="username"
-                value={authForm.email}
-                onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })}
+                value={authForm.username}
+                onChange={(event) => setAuthForm({ ...authForm, username: event.target.value })}
               />
               <input
                 type="password"
