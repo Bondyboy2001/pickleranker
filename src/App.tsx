@@ -265,6 +265,12 @@ function movementClass(value: string | number | null | undefined) {
   return 'movement'
 }
 
+function formatPositionMovement(previousRank: number | undefined, currentRank: number) {
+  if (previousRank === undefined) return '-'
+  const movement = previousRank - currentRank
+  return movement > 0 ? `+${movement}` : String(movement)
+}
+
 function nextWeekLabel(matches: Match[]) {
   const highest = matches.reduce((max, match) => {
     const numbered = match.week.match(/week\s*(\d+)/i)
@@ -479,6 +485,19 @@ function buildWeeklyStandings(
   const playerNames = new Map(players.map((player) => [player.id, player.name]))
   const standings = new Map<string, WeeklyStanding>()
 
+  players.forEach((player) => {
+    standings.set(player.id, {
+      playerId: player.id,
+      name: player.name,
+      change: 0,
+      wins: 0,
+      losses: 0,
+      games: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+    })
+  })
+
   summaries
     .filter((match) => match.playedOn === selectedWeek)
     .forEach((match) => {
@@ -521,9 +540,78 @@ function buildWeeklyStandings(
     (a, b) =>
       b.change - a.change ||
       b.wins - a.wins ||
+      b.games - a.games ||
       b.pointsFor - b.pointsAgainst - (a.pointsFor - a.pointsAgainst) ||
       a.name.localeCompare(b.name),
   )
+}
+
+function buildFullWeeklySnapshotRows(
+  snapshot: WeeklySnapshot,
+  standings: PlayerStanding[],
+  snapshots: WeeklySnapshot[],
+) {
+  const fallbackRatings = new Map(
+    standings.map((player) => [player.id, getInitialRating(player)]),
+  )
+  const names = new Map(standings.map((player) => [player.id, player.name]))
+  const snapshotRowsByPlayer = new Map(
+    snapshot.players.map((player) => [player.playerId, player]),
+  )
+  const previousRatings = new Map(fallbackRatings)
+  const currentRatings = new Map(fallbackRatings)
+  const chronologicalSnapshots = [...snapshots].sort((a, b) =>
+    a.playedOn.localeCompare(b.playedOn),
+  )
+
+  chronologicalSnapshots
+    .filter((weeklySnapshot) => weeklySnapshot.playedOn < snapshot.playedOn)
+    .forEach((weeklySnapshot) => {
+      weeklySnapshot.players.forEach((player) => {
+        previousRatings.set(player.playerId, player.rating)
+        currentRatings.set(player.playerId, player.rating)
+      })
+    })
+
+  snapshot.players.forEach((player) => {
+    currentRatings.set(player.playerId, player.rating)
+  })
+
+  const previousRankByPlayer = new Map(
+    standings
+      .map((player) => ({
+        playerId: player.id,
+        rating: previousRatings.get(player.id) ?? getInitialRating(player),
+        name: player.name,
+      }))
+      .sort((a, b) => b.rating - a.rating || a.name.localeCompare(b.name))
+      .map((player, index) => [player.playerId, index + 1]),
+  )
+
+  return standings
+    .map((player) => {
+      const snapshotRow = snapshotRowsByPlayer.get(player.id)
+      const rating = currentRatings.get(player.id) ?? getInitialRating(player)
+      return {
+        playerId: player.id,
+        name: snapshotRow?.name ?? names.get(player.id) ?? 'Unknown',
+        rank: 0,
+        rating,
+        movement: '-',
+      }
+    })
+    .sort((a, b) => b.rating - a.rating || a.name.localeCompare(b.name))
+    .map((player, index) => {
+      const rank = index + 1
+      return {
+        ...player,
+        rank,
+        movement: formatPositionMovement(
+          previousRankByPlayer.get(player.playerId),
+          rank,
+        ),
+      }
+    })
 }
 
 function buildWeekStartRatings(
@@ -816,6 +904,13 @@ function App() {
     () => sourceWeeklySnapshots.find((snapshot) => snapshot.key === activeWeek),
     [activeWeek],
   )
+  const activeWeeklySnapshotPlayerIds = useMemo(
+    () =>
+      new Set(
+        activeWeeklySnapshot?.players.map((player) => player.playerId) ?? [],
+      ),
+    [activeWeeklySnapshot],
+  )
   const snapshotRatingChanges = useMemo(
     () => buildSnapshotRatingChanges(sourceWeeklySnapshots),
     [],
@@ -827,6 +922,17 @@ function App() {
   const weeklyStandings = useMemo(
     () => buildWeeklyStandings(activeWeek, summaries, data.players),
     [activeWeek, summaries, data.players],
+  )
+  const fullWeeklySnapshotRows = useMemo(
+    () =>
+      activeWeeklySnapshot
+        ? buildFullWeeklySnapshotRows(
+            activeWeeklySnapshot,
+            standings,
+            sourceWeeklySnapshots,
+          )
+        : [],
+    [activeWeeklySnapshot, standings],
   )
   const rankByPlayerId = useMemo(
     () => new Map(standings.map((player, index) => [player.id, index + 1])),
@@ -856,18 +962,23 @@ function App() {
         : [],
     [activeWeek, data.matches, data.players, selectedWeeklyPlayerId],
   )
-  const selectedWeeklySnapshotPlayer = activeWeeklySnapshot?.players.find(
+  const selectedWeeklySnapshotPlayer = fullWeeklySnapshotRows.find(
     (player) => player.playerId === selectedWeeklyPlayerId,
   )
   const selectedWeeklySnapshotRatingChange =
     selectedWeeklyPlayerId && activeWeeklySnapshot
-      ? activeSnapshotRatingChanges.get(selectedWeeklyPlayerId)
+      ? activeWeeklySnapshotPlayerIds.has(selectedWeeklyPlayerId)
+        ? activeSnapshotRatingChanges.get(selectedWeeklyPlayerId)
+        : 0
       : undefined
   const selectedWeeklyComputedPlayer = weeklyStandings.find(
     (player) => player.playerId === selectedWeeklyPlayerId,
   )
   const selectedWeeklyPlayerName =
-    selectedWeeklySnapshotPlayer?.name ?? selectedWeeklyComputedPlayer?.name ?? ''
+    selectedWeeklySnapshotPlayer?.name ??
+    selectedWeeklyComputedPlayer?.name ??
+    standings.find((player) => player.id === selectedWeeklyPlayerId)?.name ??
+    ''
 
   function persist(nextData: AppData, message: string) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData))
@@ -1276,8 +1387,8 @@ function App() {
                     <h2>Weekly leaderboard</h2>
                     <p>
                       {activeWeeklySnapshot
-                        ? 'Active 4DR ranking list and position movement for this week.'
-                        : 'Ranks players by 4DR points gained in the selected week.'}
+                        ? 'Full 4DR ranking list and position movement for this week.'
+                        : 'Shows every player ranked by 4DR points gained in the selected week.'}
                     </p>
                   </div>
                   <select
@@ -1318,10 +1429,12 @@ function App() {
                     </thead>
                     <tbody>
                       {activeWeeklySnapshot
-                        ? activeWeeklySnapshot.players.map((player) => {
-                            const ratingChange = activeSnapshotRatingChanges.get(
+                        ? fullWeeklySnapshotRows.map((player) => {
+                            const ratingChange = activeWeeklySnapshotPlayerIds.has(
                               player.playerId,
                             )
+                              ? activeSnapshotRatingChanges.get(player.playerId)
+                              : 0
 
                             return (
                               <tr
