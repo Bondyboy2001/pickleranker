@@ -200,7 +200,7 @@ function App() {
     setNotice(message)
   }, [])
 
-  const weeklySnapshots = data.weeklySnapshots ?? []
+  const weeklySnapshots = useMemo(() => data.weeklySnapshots ?? [], [data.weeklySnapshots])
   const { standings, summaries } = useMemo(() => buildStandings(data), [data])
   const weekOptions = useMemo(
     () => buildWeekOptions(summaries, weeklySnapshots),

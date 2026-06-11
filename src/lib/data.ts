@@ -2,9 +2,9 @@ import type { AppData, DbMatch, DbPlayer, Match, Player } from './types'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { cardiffSeedData } from '../data/cardiffSeed'
 
-export const STORAGE_KEY = 'pickleranker-data-v4'
+const STORAGE_KEY = 'pickleranker-data-v4'
 
-export const EMPTY_DATA: AppData = { players: [], matches: [] }
+const EMPTY_DATA: AppData = { players: [], matches: [] }
 const seededData = cardiffSeedData as unknown as AppData
 const sourceWeeklySnapshots = seededData.weeklySnapshots ?? []
 
@@ -37,7 +37,7 @@ export function loadLocalData(): AppData {
   }
 }
 
-export function mergeWithSeedData(data: AppData): AppData {
+function mergeWithSeedData(data: AppData): AppData {
   const seededPlayerById = new Map(seededData.players.map((player) => [player.id, player]))
   const seededPlayerByName = new Map(
     seededData.players.map((player) => [normalizeName(player.name), player]),
@@ -101,7 +101,7 @@ export function playerToDb(player: Player): DbPlayer {
   }
 }
 
-export function dbToPlayer(player: DbPlayer): Player {
+function dbToPlayer(player: DbPlayer): Player {
   return {
     id: player.id,
     name: player.name,
@@ -132,7 +132,7 @@ export function matchToDb(match: Match): DbMatch {
   }
 }
 
-export function dbToMatch(match: DbMatch): Match {
+function dbToMatch(match: DbMatch): Match {
   return {
     id: match.id,
     week: match.week,

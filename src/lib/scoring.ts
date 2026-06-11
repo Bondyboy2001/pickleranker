@@ -21,7 +21,7 @@ export function roundRating(value: number) {
   return Math.round(value * 10000) / 10000
 }
 
-export function roundBasePoints(value: number) {
+function roundBasePoints(value: number) {
   return Math.round(value * 1000) / 1000
 }
 

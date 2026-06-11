@@ -1,5 +1,3 @@
-import type { MatchSummary } from './scoring'
-
 export type Player = {
   id: string
   name: string
@@ -72,7 +70,7 @@ export type WeeklyStanding = {
   pointsAgainst: number
 }
 
-export type WeeklyGamePlayer = {
+type WeeklyGamePlayer = {
   id: string
   name: string
   start: number
@@ -136,5 +134,3 @@ export type MatchFormState = {
   scoreA: string
   scoreB: string
 }
-
-export type { MatchSummary }

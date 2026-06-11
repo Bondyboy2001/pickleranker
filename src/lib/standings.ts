@@ -15,7 +15,7 @@ import { sortMatches } from './data'
 
 export const DEFAULT_RATING = 3
 
-export function getInitialRating(player: Player) {
+function getInitialRating(player: Player) {
   return player.importedRating ?? player.skillLevel ?? DEFAULT_RATING
 }
 
