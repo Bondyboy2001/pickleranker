@@ -8,7 +8,6 @@ import {
   Moon,
   Pencil,
   Plus,
-  RefreshCw,
   Save,
   Search,
   Sun,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react'
 import './App.css'
 import { NoticeBanner } from './components/NoticeBanner'
+import { TournamentPanel } from './components/TournamentPanel'
 import {
   checkIsAdmin,
   formatPlayedOnDate,
@@ -56,7 +56,9 @@ import type {
 import type { Session } from '@supabase/supabase-js'
 
 const THEME_STORAGE_KEY = 'pickleranker-theme'
-const LEADERBOARD_COLUMN_COUNT = 7
+const LEADERBOARD_COLUMN_COUNT = 8
+const ADMIN_USERNAME = 'ben'
+const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
 const emptyMatch: MatchFormState = {
   playedOn: new Date().toISOString().slice(0, 10),
@@ -89,7 +91,7 @@ function App() {
   )
   const [session, setSession] = useState<Session | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [authForm, setAuthForm] = useState({ email: '', password: '' })
+  const [authForm, setAuthForm] = useState({ username: '', password: '' })
   const [authError, setAuthError] = useState('')
   const [notice, setNotice] = useState('')
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>(
@@ -266,15 +268,20 @@ function App() {
     event.preventDefault()
     if (!supabase) return
     setAuthError('')
+    const username = authForm.username.trim().toLowerCase()
+    if (username !== ADMIN_USERNAME) {
+      setAuthError('Invalid username or password.')
+      return
+    }
     const { error } = await supabase.auth.signInWithPassword({
-      email: authForm.email.trim(),
+      email: ADMIN_AUTH_EMAIL,
       password: authForm.password,
     })
     if (error) {
-      setAuthError(error.message)
+      setAuthError('Invalid username or password.')
       return
     }
-    setAuthForm({ email: '', password: '' })
+    setAuthForm({ username: '', password: '' })
     const admin = await checkIsAdmin()
     setIsAdmin(admin)
     setNotice(admin ? 'Admin signed in.' : 'Signed in, but this account is not an admin.')
@@ -378,6 +385,9 @@ function App() {
   function startEditMatch(match: Match) {
     setEditingMatchId(match.id)
     setMatchError('')
+    document
+      .querySelector('.match-entry-panel')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setMatchForm({
       playedOn: match.playedOn,
       teamA1: match.teamA[0],
@@ -414,6 +424,24 @@ function App() {
     )
   }
 
+  async function saveTournamentRound(newMatches: Match[]) {
+    if (!requireAdmin()) return false
+
+    if (supabase) {
+      const { error } = await supabase.from('matches').insert(newMatches.map(matchToDb))
+      if (error) {
+        setNotice(error.message)
+        return false
+      }
+    }
+
+    applyData(
+      { ...data, matches: [...data.matches, ...newMatches] },
+      `${newMatches.length} tournament games saved to the leaderboard.`,
+    )
+    return true
+  }
+
   function toggleSort(key: SortKey) {
     setSort((current) => ({
       key,
@@ -427,8 +455,11 @@ function App() {
 
       <header className="topbar">
         <div className="brand-lockup">
-          <span className="brand-title">pickleranker</span>
-          <span className="brand-subtitle">4DR leaderboard</span>
+          <img
+            className="brand-logo"
+            src="/david-lloyd-pickleball-logo.png"
+            alt="David Lloyd Clubs Pickleball"
+          />
         </div>
         <div className="topbar-actions">
           {route !== '#/admin' ? (
@@ -448,17 +479,6 @@ function App() {
                 Weekly
               </button>
             </div>
-          ) : null}
-          {isSupabaseConfigured && route !== '#/admin' ? (
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => refreshRemoteData('Leaderboard refreshed.')}
-              aria-label="Refresh leaderboard"
-              title="Refresh leaderboard"
-            >
-              <RefreshCw size={17} />
-            </button>
           ) : null}
           <button
             type="button"
@@ -502,6 +522,8 @@ function App() {
           playerNameById={playerNameById}
           recentMatches={recentMatches}
           session={session}
+          standings={standings}
+          saveTournamentRound={saveTournamentRound}
           setAuthForm={setAuthForm}
           setMatchError={setMatchError}
           setMatchForm={setMatchForm}
@@ -569,10 +591,11 @@ function App() {
                     <tr>
                       <SortableHeader label="#" sortKey="rank" activeSort={sort} onSort={toggleSort} />
                       <SortableHeader label="Player" sortKey="player" activeSort={sort} onSort={toggleSort} />
-                      <SortableHeader label="4DR Rating" sortKey="rating" activeSort={sort} onSort={toggleSort} />
+                      <SortableHeader label="4DR" sortKey="rating" activeSort={sort} onSort={toggleSort} />
                       <SortableHeader label="Wins" sortKey="wins" activeSort={sort} onSort={toggleSort} />
                       <SortableHeader label="Losses" sortKey="losses" activeSort={sort} onSort={toggleSort} />
                       <SortableHeader label="Games" sortKey="games" activeSort={sort} onSort={toggleSort} />
+                      <SortableHeader label="Point" sortKey="pointDiff" activeSort={sort} onSort={toggleSort} />
                       <SortableHeader label="Win %" sortKey="record" activeSort={sort} onSort={toggleSort} />
                     </tr>
                   </thead>
@@ -620,6 +643,10 @@ function App() {
                             <td>{player.wins}</td>
                             <td>{player.losses}</td>
                             <td>{player.games}</td>
+                            <td>
+                              {player.pointsFor - player.pointsAgainst >= 0 ? '+' : ''}
+                              {player.pointsFor - player.pointsAgainst}
+                            </td>
                             <td>{formatWinRate(player.wins, player.games)}</td>
                           </tr>
                           {isSelected ? (
@@ -763,6 +790,8 @@ function AdminPage({
   playerNameById,
   recentMatches,
   session,
+  standings,
+  saveTournamentRound,
   setAuthForm,
   setMatchError,
   setMatchForm,
@@ -775,7 +804,7 @@ function AdminPage({
   startEditMatch,
   deleteMatch,
 }: {
-  authForm: { email: string; password: string }
+  authForm: { username: string; password: string }
   authError: string
   canEdit: boolean
   data: AppData
@@ -788,7 +817,9 @@ function AdminPage({
   playerNameById: Map<string, string>
   recentMatches: Match[]
   session: Session | null
-  setAuthForm: (value: { email: string; password: string }) => void
+  standings: PlayerStanding[]
+  saveTournamentRound: (matches: Match[]) => Promise<boolean>
+  setAuthForm: (value: { username: string; password: string }) => void
   setMatchError: (value: string) => void
   setMatchForm: (value: MatchFormState) => void
   setPlayerForm: (value: { name: string; skillLevel: string }) => void
@@ -800,6 +831,8 @@ function AdminPage({
   startEditMatch: (match: Match) => void
   deleteMatch: (matchId: string) => void
 }) {
+  const [adminTab, setAdminTab] = useState<'games' | 'tournament'>('games')
+
   const updateMatchForm = (next: Partial<MatchFormState>) => {
     setMatchForm({ ...matchForm, ...next })
     setMatchError('')
@@ -817,7 +850,7 @@ function AdminPage({
                   ? isAdmin
                     ? 'Signed in as admin. Updates save online.'
                     : 'Signed in, but this account is not listed as an admin.'
-                  : 'Sign in to update games and players.'
+                  : 'Sign in with username ben to update games and players.'
                 : 'Supabase is not configured, so local admin mode is enabled on this device.'}
             </p>
           </div>
@@ -825,7 +858,7 @@ function AdminPage({
         {isSupabaseConfigured ? (
           session ? (
             <div className="admin-status">
-              <span>{session.user.email}</span>
+              <span>{isAdmin ? ADMIN_USERNAME : session.user.email}</span>
               <button type="button" className="ghost-button" onClick={signOut}>
                 <LogOut size={16} />
                 Sign out
@@ -834,11 +867,11 @@ function AdminPage({
           ) : (
             <form className="admin-form" onSubmit={signIn}>
               <input
-                type="email"
-                placeholder="Email"
+                type="text"
+                placeholder="Username"
                 autoComplete="username"
-                value={authForm.email}
-                onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })}
+                value={authForm.username}
+                onChange={(event) => setAuthForm({ ...authForm, username: event.target.value })}
               />
               <input
                 type="password"
@@ -862,6 +895,29 @@ function AdminPage({
       </section>
 
       {canEdit ? (
+        <div className="view-tabs admin-tabs" role="tablist" aria-label="Admin views">
+          <button
+            type="button"
+            className={adminTab === 'games' ? 'active' : ''}
+            onClick={() => setAdminTab('games')}
+          >
+            Score entry
+          </button>
+          <button
+            type="button"
+            className={adminTab === 'tournament' ? 'active' : ''}
+            onClick={() => setAdminTab('tournament')}
+          >
+            Tournament
+          </button>
+        </div>
+      ) : null}
+
+      {canEdit && adminTab === 'tournament' ? (
+        <TournamentPanel standings={standings} saveRoundMatches={saveTournamentRound} />
+      ) : null}
+
+      {canEdit && adminTab === 'games' ? (
         <div className="admin-grid">
           <section className="panel match-entry-panel">
             <div className="panel-heading match-entry-heading">
@@ -997,7 +1053,14 @@ function AdminPage({
                 <p className="empty-table">No games saved yet.</p>
               ) : (
                 recentMatches.slice(0, 30).map((match) => (
-                  <div className="recent-match-row" key={match.id}>
+                  <div
+                    className={
+                      editingMatchId === match.id
+                        ? 'recent-match-row editing'
+                        : 'recent-match-row'
+                    }
+                    key={match.id}
+                  >
                     <div>
                       <strong>{match.week}</strong>
                       <span>

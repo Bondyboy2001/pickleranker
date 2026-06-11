@@ -102,7 +102,7 @@ export type WeeklyPlayerGame = {
   ratingChange: number
 }
 
-export type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games' | 'wins' | 'losses'
+export type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games' | 'wins' | 'losses' | 'pointDiff'
 export type SortDirection = 'asc' | 'desc'
 
 export type DbPlayer = {

@@ -458,6 +458,7 @@ export function sortStandings(
       if (key === 'wins') result = a.player.wins - b.player.wins
       if (key === 'losses') result = a.player.losses - b.player.losses
       if (key === 'games') result = a.player.games - b.player.games
+      if (key === 'pointDiff') result = (a.player.pointsFor - a.player.pointsAgainst) - (b.player.pointsFor - b.player.pointsAgainst)
       return result * directionMultiplier || a.rankIndex - b.rankIndex
     })
     .map((item) => item.player)
