@@ -74,9 +74,23 @@ type WeeklyStanding = {
   pointsAgainst: number
 }
 
+type WeeklySnapshot = {
+  key: string
+  label: string
+  playedOn: string
+  players: {
+    playerId: string
+    name: string
+    rank: number
+    rating: number
+    movement: string
+  }[]
+}
+
 type AppData = {
   players: Player[]
   matches: Match[]
+  weeklySnapshots?: WeeklySnapshot[]
 }
 
 type DbPlayer = {
@@ -111,6 +125,7 @@ const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
 const seededData = cardiffSeedData as unknown as AppData
+const sourceWeeklySnapshots = seededData.weeklySnapshots ?? []
 
 function nextWeekLabel(matches: Match[]) {
   const highest = matches.reduce((max, match) => {
@@ -216,7 +231,11 @@ function buildStandings(data: AppData) {
   }
 }
 
-function buildPlayerWeekPoints(playerId: string, summaries: MatchSummary[]) {
+function buildPlayerWeekPoints(
+  playerId: string,
+  summaries: MatchSummary[],
+  snapshots: WeeklySnapshot[],
+) {
   const weeks = new Map<string, PlayerWeekPoint>()
   const chronological = [...summaries].reverse()
 
@@ -253,6 +272,38 @@ function buildPlayerWeekPoints(playerId: string, summaries: MatchSummary[]) {
     weeks.set(key, existing)
   })
 
+  const snapshotWeeks = snapshots
+    .map((snapshot) => {
+      const snapshotPlayer = snapshot.players.find((player) => player.playerId === playerId)
+      const existing = weeks.get(snapshot.key)
+      if (!snapshotPlayer) return null
+
+      return {
+        key: snapshot.key,
+        label: snapshot.label,
+        playedOn: snapshot.playedOn,
+        change: 0,
+        cumulative: roundRating(snapshotPlayer.rating - DEFAULT_RATING),
+        games: existing?.games ?? 0,
+        wins: existing?.wins ?? 0,
+        losses: existing?.losses ?? 0,
+        pointsFor: existing?.pointsFor ?? 0,
+        pointsAgainst: existing?.pointsAgainst ?? 0,
+      }
+    })
+    .filter((week): week is PlayerWeekPoint => Boolean(week))
+    .sort((a, b) => a.playedOn.localeCompare(b.playedOn))
+
+  if (snapshotWeeks.length > 0) {
+    let previousRating = DEFAULT_RATING
+    return snapshotWeeks.map((week) => {
+      const rating = roundRating(DEFAULT_RATING + week.cumulative)
+      const change = roundRating(rating - previousRating)
+      previousRating = rating
+      return { ...week, change }
+    })
+  }
+
   let cumulative = 0
   return [...weeks.values()]
     .sort((a, b) => a.playedOn.localeCompare(b.playedOn))
@@ -262,8 +313,15 @@ function buildPlayerWeekPoints(playerId: string, summaries: MatchSummary[]) {
     })
 }
 
-function buildWeekOptions(summaries: MatchSummary[]) {
+function buildWeekOptions(summaries: MatchSummary[], snapshots: WeeklySnapshot[]) {
   const weeks = new Map<string, { key: string; label: string; playedOn: string }>()
+  snapshots.forEach((snapshot) => {
+    weeks.set(snapshot.key, {
+      key: snapshot.key,
+      label: snapshot.label,
+      playedOn: snapshot.playedOn,
+    })
+  })
   summaries.forEach((match) => {
     const key = match.playedOn
     if (!weeks.has(key)) {
@@ -476,8 +534,15 @@ function App() {
 
   const { standings, summaries } = useMemo(() => buildStandings(data), [data])
   const visibleSummaries = summaries.slice(0, 24)
-  const weekOptions = useMemo(() => buildWeekOptions(summaries), [summaries])
+  const weekOptions = useMemo(
+    () => buildWeekOptions(summaries, sourceWeeklySnapshots),
+    [summaries],
+  )
   const activeWeek = selectedWeek || weekOptions[0]?.key || ''
+  const activeWeeklySnapshot = useMemo(
+    () => sourceWeeklySnapshots.find((snapshot) => snapshot.key === activeWeek),
+    [activeWeek],
+  )
   const weeklyStandings = useMemo(
     () => buildWeeklyStandings(activeWeek, summaries, data.players),
     [activeWeek, summaries, data.players],
@@ -890,7 +955,11 @@ function App() {
                     {filteredStandings.map((player) => {
                       const isSelected = selectedPlayerId === player.id
                       const playerWeeks = isSelected
-                        ? buildPlayerWeekPoints(player.id, summaries)
+                        ? buildPlayerWeekPoints(
+                            player.id,
+                            summaries,
+                            sourceWeeklySnapshots,
+                          )
                         : []
                       const rank = rankByPlayerId.get(player.id) ?? 0
 
@@ -960,7 +1029,11 @@ function App() {
               <div className="panel-heading weekly-heading">
                 <div>
                   <h2>Weekly leaderboard</h2>
-                  <p>Ranks players by 4DR points gained in the selected week.</p>
+                  <p>
+                    {activeWeeklySnapshot
+                      ? 'Active 4DR ranking list and position movement for this week.'
+                      : 'Ranks players by 4DR points gained in the selected week.'}
+                  </p>
                 </div>
                 <select
                   className="week-select"
@@ -978,15 +1051,49 @@ function App() {
               <div className="table-wrap">
                 <table className="weekly-table">
                   <thead>
-                    <tr>
-                      <th>Rank</th>
-                      <th>Player</th>
-                      <th>Weekly +/-</th>
-                      <th>W-L</th>
-                    </tr>
+                    {activeWeeklySnapshot ? (
+                      <tr>
+                        <th>Rank</th>
+                        <th>Player</th>
+                        <th>4DR</th>
+                        <th>POS +/-</th>
+                      </tr>
+                    ) : (
+                      <tr>
+                        <th>Rank</th>
+                        <th>Player</th>
+                        <th>Weekly +/-</th>
+                        <th>W-L</th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
-                    {weeklyStandings.map((player, index) => {
+                    {activeWeeklySnapshot
+                      ? activeWeeklySnapshot.players.map((player) => (
+                          <tr key={player.playerId}>
+                            <td className="rank-cell">{player.rank}</td>
+                            <td>
+                              <strong>{player.name}</strong>
+                            </td>
+                            <td className="rating-cell">
+                              {formatRating(player.rating)}
+                            </td>
+                            <td>
+                              <span
+                                className={
+                                  player.movement.startsWith('+')
+                                    ? 'movement positive'
+                                    : player.movement.startsWith('-')
+                                      ? 'movement negative'
+                                      : 'movement'
+                                }
+                              >
+                                {player.movement}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      : weeklyStandings.map((player, index) => {
                       const pointDifference = player.pointsFor - player.pointsAgainst
 
                       return (
@@ -1018,7 +1125,7 @@ function App() {
                         </tr>
                       )
                     })}
-                    {weeklyStandings.length === 0 ? (
+                    {!activeWeeklySnapshot && weeklyStandings.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="empty-table">
                           No games found for this week.
