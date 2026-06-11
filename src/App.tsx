@@ -14,6 +14,7 @@ import { cardiffSeedData } from './data/cardiffSeed'
 import {
   calculateMatch,
   formatRating,
+  probabilityForTeam,
   roundRating,
   type MatchSummary,
 } from './lib/scoring'
@@ -73,13 +74,32 @@ type WeeklyStanding = {
   pointsAgainst: number
 }
 
+type WeeklyGamePlayer = {
+  id: string
+  name: string
+  start: number
+  change: number
+  finish: number
+}
+
 type WeeklyPlayerGame = {
   id: string
+  gameNumber: number
   week: string
   playedOn: string
-  teamLabel: string
-  opponentLabel: string
-  scoreLabel: string
+  selectedPlayerId: string
+  selectedTeam: 'A' | 'B'
+  winner: 'A' | 'B'
+  scoreA: number
+  scoreB: number
+  teamAStart: number
+  teamBStart: number
+  teamAWinProbability: number
+  teamADelta: number
+  teamBDelta: number
+  baseDelta: number
+  teamA: WeeklyGamePlayer[]
+  teamB: WeeklyGamePlayer[]
   result: 'Win' | 'Loss'
   ratingChange: number
 }
@@ -137,6 +157,114 @@ const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 const seededData = cardiffSeedData as unknown as AppData
 const sourceWeeklySnapshots = seededData.weeklySnapshots ?? []
 
+function normalizeName(name: string) {
+  return name.trim().toLowerCase()
+}
+
+function sortMatches(matches: Match[]) {
+  return [...matches].sort((a, b) =>
+    `${a.playedOn}-${a.id}`.localeCompare(`${b.playedOn}-${b.id}`),
+  )
+}
+
+function mergeWithSeedData(data: AppData): AppData {
+  const seededPlayerById = new Map(
+    seededData.players.map((player) => [player.id, player]),
+  )
+  const seededPlayerByName = new Map(
+    seededData.players.map((player) => [normalizeName(player.name), player]),
+  )
+  const players = new Map<string, Player>()
+
+  seededData.players.forEach((player) => players.set(player.id, player))
+  data.players.forEach((player) => {
+    const seededPlayer =
+      seededPlayerById.get(player.id) ??
+      seededPlayerByName.get(normalizeName(player.name))
+
+    if (!seededPlayer) {
+      players.set(player.id, player)
+      return
+    }
+
+    players.set(seededPlayer.id, {
+      ...player,
+      id: seededPlayer.id,
+      name: seededPlayer.name,
+      skillLevel: seededPlayer.skillLevel,
+      importedRating: seededPlayer.importedRating,
+      importedRank: seededPlayer.importedRank,
+      importedMovement: seededPlayer.importedMovement,
+    })
+  })
+
+  const seededImportedMatchesById = new Map(
+    seededData.matches
+      .filter((match) => match.imported)
+      .map((match) => [match.id, match]),
+  )
+  const matches = new Map<string, Match>()
+
+  seededData.matches.forEach((match) => matches.set(match.id, match))
+  data.matches.forEach((match) => {
+    if (match.imported) {
+      const seededMatch = seededImportedMatchesById.get(match.id)
+      if (seededMatch) matches.set(match.id, seededMatch)
+      return
+    }
+    matches.set(match.id, match)
+  })
+
+  return {
+    players: [...players.values()],
+    matches: sortMatches([...matches.values()]),
+    weeklySnapshots: sourceWeeklySnapshots,
+  }
+}
+
+function buildSnapshotRatingChanges(snapshots: WeeklySnapshot[]) {
+  const changesByWeek = new Map<string, Map<string, number | null>>()
+  const previousRatingByPlayer = new Map<string, number>()
+
+  const chronologicalSnapshots = [...snapshots].sort((a, b) =>
+    a.playedOn.localeCompare(b.playedOn),
+  )
+
+  chronologicalSnapshots.forEach((snapshot) => {
+    const weekChanges = new Map<string, number | null>()
+
+    snapshot.players.forEach((player) => {
+      const previousRating = previousRatingByPlayer.get(player.playerId)
+      weekChanges.set(
+        player.playerId,
+        previousRating === undefined
+          ? null
+          : roundRating(player.rating - previousRating),
+      )
+    })
+    snapshot.players.forEach((player) => {
+      previousRatingByPlayer.set(player.playerId, player.rating)
+    })
+    changesByWeek.set(snapshot.key, weekChanges)
+  })
+
+  return changesByWeek
+}
+
+function formatRatingChange(change: number | null | undefined) {
+  if (change === null || change === undefined) return '-'
+  return `${change >= 0 ? '+' : ''}${change.toFixed(3)}`
+}
+
+function movementClass(value: string | number | null | undefined) {
+  if (typeof value === 'number') {
+    return value >= 0 ? 'movement positive' : 'movement negative'
+  }
+  if (value?.startsWith('+')) return 'movement positive'
+  if (value?.startsWith('-')) return 'movement negative'
+  return 'movement'
+}
+
 function nextWeekLabel(matches: Match[]) {
   const highest = matches.reduce((max, match) => {
     const numbered = match.week.match(/week\s*(\d+)/i)
@@ -185,9 +313,7 @@ function buildStandings(data: AppData) {
     })
   })
 
-  const sortedMatches = [...data.matches].sort((a, b) =>
-    `${a.playedOn}-${a.id}`.localeCompare(`${b.playedOn}-${b.id}`),
-  )
+  const sortedMatches = sortMatches(data.matches)
   const summaries: MatchSummary[] = []
 
   sortedMatches.forEach((match) => {
@@ -400,41 +526,141 @@ function buildWeeklyStandings(
   )
 }
 
+function buildWeekStartRatings(
+  selectedWeek: string,
+  players: Player[],
+  matches: Match[],
+  snapshots: WeeklySnapshot[],
+) {
+  const ratings = new Map(
+    players.map((player) => [player.id, player.skillLevel ?? DEFAULT_RATING]),
+  )
+  const previousSnapshotDates = snapshots
+    .filter((snapshot) => snapshot.playedOn < selectedWeek)
+    .sort((a, b) => a.playedOn.localeCompare(b.playedOn))
+
+  previousSnapshotDates.forEach((snapshot) => {
+    snapshot.players.forEach((player) => {
+      ratings.set(player.playerId, player.rating)
+    })
+  })
+
+  const latestSnapshotDate = previousSnapshotDates.at(-1)?.playedOn
+  if (latestSnapshotDate) {
+    sortMatches(matches)
+      .filter(
+        (match) =>
+          !match.imported &&
+          match.playedOn > latestSnapshotDate &&
+          match.playedOn < selectedWeek,
+      )
+      .forEach((match) => {
+        const summary = calculateMatch(match, ratings)
+        match.teamA.forEach((matchPlayerId) => {
+          ratings.set(
+            matchPlayerId,
+            roundRating(
+              (ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamADelta,
+            ),
+          )
+        })
+        match.teamB.forEach((matchPlayerId) => {
+          ratings.set(
+            matchPlayerId,
+            roundRating(
+              (ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamBDelta,
+            ),
+          )
+        })
+      })
+  }
+
+  return ratings
+}
+
 function buildWeeklyPlayerGames(
   playerId: string,
   selectedWeek: string,
-  summaries: MatchSummary[],
-  playerName: (id: string) => string,
+  matches: Match[],
+  players: Player[],
+  snapshots: WeeklySnapshot[],
 ) {
-  return [...summaries]
-    .reverse()
-    .filter(
-      (match) =>
-        match.playedOn === selectedWeek &&
-        (match.teamA.includes(playerId) || match.teamB.includes(playerId)),
-    )
-    .map<WeeklyPlayerGame>((match) => {
-      const team = match.teamA.includes(playerId) ? 'A' : 'B'
-      const teamIds = team === 'A' ? match.teamA : match.teamB
-      const opponentIds = team === 'A' ? match.teamB : match.teamA
-      const teamScore = team === 'A' ? match.scoreA : match.scoreB
-      const opponentScore = team === 'A' ? match.scoreB : match.scoreA
-      const ratingChange = team === 'A' ? match.teamADelta : match.teamBDelta
+  const playerNames = new Map(players.map((player) => [player.id, player.name]))
+  const ratings = buildWeekStartRatings(selectedWeek, players, matches, snapshots)
+  const games: WeeklyPlayerGame[] = []
 
-      return {
-        id: match.id,
-        week: match.week,
-        playedOn: match.playedOn,
-        teamLabel: teamIds
-          .filter((teamPlayerId) => teamPlayerId !== playerId)
-          .map(playerName)
-          .join(' / '),
-        opponentLabel: opponentIds.map(playerName).join(' / '),
-        scoreLabel: `${teamScore}-${opponentScore}`,
-        result: match.winner === team ? 'Win' : 'Loss',
-        ratingChange,
+  sortMatches(matches)
+    .filter((match) => match.playedOn === selectedWeek)
+    .forEach((match, index) => {
+      const summary = calculateMatch(match, ratings)
+      const teamAWinProbability = probabilityForTeam(
+        summary.teamAStart,
+        summary.teamBStart,
+      )
+      const makePlayer = (matchPlayerId: string, change: number) => {
+        const start = ratings.get(matchPlayerId) ?? DEFAULT_RATING
+        return {
+          id: matchPlayerId,
+          name: playerNames.get(matchPlayerId) ?? 'Unknown',
+          start,
+          change,
+          finish: roundRating(start + change),
+        }
       }
+      const teamA = match.teamA.map((matchPlayerId) =>
+        makePlayer(matchPlayerId, summary.teamADelta),
+      )
+      const teamB = match.teamB.map((matchPlayerId) =>
+        makePlayer(matchPlayerId, summary.teamBDelta),
+      )
+
+      if (match.teamA.includes(playerId) || match.teamB.includes(playerId)) {
+        const selectedTeam = match.teamA.includes(playerId) ? 'A' : 'B'
+        const ratingChange =
+          selectedTeam === 'A' ? summary.teamADelta : summary.teamBDelta
+
+        games.push({
+          id: match.id,
+          gameNumber: index + 1,
+          week: match.week,
+          playedOn: match.playedOn,
+          selectedPlayerId: playerId,
+          selectedTeam,
+          winner: summary.winner,
+          scoreA: match.scoreA,
+          scoreB: match.scoreB,
+          teamAStart: summary.teamAStart,
+          teamBStart: summary.teamBStart,
+          teamAWinProbability,
+          teamADelta: summary.teamADelta,
+          teamBDelta: summary.teamBDelta,
+          baseDelta: summary.baseDelta,
+          teamA,
+          teamB,
+          result: summary.winner === selectedTeam ? 'Win' : 'Loss',
+          ratingChange,
+        })
+      }
+
+      match.teamA.forEach((matchPlayerId) => {
+        ratings.set(
+          matchPlayerId,
+          roundRating(
+            (ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamADelta,
+          ),
+        )
+      })
+      match.teamB.forEach((matchPlayerId) => {
+        ratings.set(
+          matchPlayerId,
+          roundRating(
+            (ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamBDelta,
+          ),
+        )
+      })
     })
+
+  return games
 }
 
 function loadData(): AppData {
@@ -446,7 +672,7 @@ function loadData(): AppData {
     if (!Array.isArray(parsed.players) || !Array.isArray(parsed.matches)) {
       return seededData
     }
-    return parsed
+    return mergeWithSeedData(parsed)
   } catch {
     return seededData
   }
@@ -525,7 +751,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authForm, setAuthForm] = useState({ email: '', password: '' })
   const [authError, setAuthError] = useState('')
-  const [isLoadingRemote, setIsLoadingRemote] = useState(isSupabaseConfigured)
+  const [, setNotice] = useState('')
   const [activePublicTab, setActivePublicTab] = useState<'overall' | 'weekly'>(
     'overall',
   )
@@ -545,9 +771,6 @@ function App() {
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
   const [search, setSearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
-  const [notice, setNotice] = useState(
-    `Seeded from David Lloyd Cardiff: ${seededData.players.length} players, ${seededData.matches.length} previous games.`,
-  )
   const canEdit = !isSupabaseConfigured || Boolean(session)
 
   useEffect(() => {
@@ -570,7 +793,7 @@ function App() {
     loadRemoteData()
       .then((remoteData) => {
         if (remoteData.players.length > 0) {
-          setData(remoteData)
+          setData(mergeWithSeedData(remoteData))
           setNotice('Loaded shared online leaderboard.')
         } else {
           setNotice('Supabase is connected but has no data yet. Run the seed SQL.')
@@ -579,13 +802,11 @@ function App() {
       .catch((error: Error) => {
         setNotice(`Could not load Supabase data: ${error.message}`)
       })
-      .finally(() => setIsLoadingRemote(false))
 
     return () => listener.subscription.unsubscribe()
   }, [])
 
   const { standings, summaries } = useMemo(() => buildStandings(data), [data])
-  const visibleSummaries = summaries.slice(0, 24)
   const weekOptions = useMemo(
     () => buildWeekOptions(summaries, sourceWeeklySnapshots),
     [summaries],
@@ -594,6 +815,14 @@ function App() {
   const activeWeeklySnapshot = useMemo(
     () => sourceWeeklySnapshots.find((snapshot) => snapshot.key === activeWeek),
     [activeWeek],
+  )
+  const snapshotRatingChanges = useMemo(
+    () => buildSnapshotRatingChanges(sourceWeeklySnapshots),
+    [],
+  )
+  const activeSnapshotRatingChanges = useMemo(
+    () => snapshotRatingChanges.get(activeWeek) ?? new Map<string, number | null>(),
+    [activeWeek, snapshotRatingChanges],
   )
   const weeklyStandings = useMemo(
     () => buildWeeklyStandings(activeWeek, summaries, data.players),
@@ -620,15 +849,20 @@ function App() {
         ? buildWeeklyPlayerGames(
             selectedWeeklyPlayerId,
             activeWeek,
-            summaries,
-            (id) => data.players.find((player) => player.id === id)?.name ?? 'Unknown',
+            data.matches,
+            data.players,
+            sourceWeeklySnapshots,
           )
         : [],
-    [activeWeek, data.players, selectedWeeklyPlayerId, summaries],
+    [activeWeek, data.matches, data.players, selectedWeeklyPlayerId],
   )
   const selectedWeeklySnapshotPlayer = activeWeeklySnapshot?.players.find(
     (player) => player.playerId === selectedWeeklyPlayerId,
   )
+  const selectedWeeklySnapshotRatingChange =
+    selectedWeeklyPlayerId && activeWeeklySnapshot
+      ? activeSnapshotRatingChanges.get(selectedWeeklyPlayerId)
+      : undefined
   const selectedWeeklyComputedPlayer = weeklyStandings.find(
     (player) => player.playerId === selectedWeeklyPlayerId,
   )
@@ -813,9 +1047,6 @@ function App() {
     setNotice('Backup downloaded and copied to clipboard as JSON.')
   }
 
-  const playerName = (id: string) =>
-    data.players.find((player) => player.id === id)?.name ?? 'Unknown'
-
   function toggleSort(key: SortKey) {
     setSort((current) => ({
       key,
@@ -890,10 +1121,6 @@ function App() {
               <strong>
                 {standings[0] ? formatRating(standings[0].rating) : '0.000'}
               </strong>
-            </div>
-            <div>
-              <span>Status</span>
-              <strong>{isLoadingRemote ? 'Loading online data...' : notice}</strong>
             </div>
           </section>
 
@@ -1040,50 +1267,6 @@ function App() {
                   </table>
                 </div>
               </section>
-
-              <section className="panel recent-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Recent results</h2>
-                <p>
-                  Showing latest {visibleSummaries.length} of {summaries.length}{' '}
-                  saved games.
-                </p>
-              </div>
-            </div>
-            <div className="results-grid">
-              {visibleSummaries.map((match) => (
-                <article className="result-card" key={match.id}>
-                  <div>
-                    <strong>{match.week}</strong>
-                    <span className="result-meta">{match.playedOn}</span>
-                  </div>
-                  <p>
-                    <span
-                      className={match.winner === 'A' ? 'winning-team' : undefined}
-                    >
-                      {playerName(match.teamA[0])} / {playerName(match.teamA[1])}
-                    </span>
-                    <b>
-                      {match.scoreA}-{match.scoreB}
-                    </b>
-                    <span
-                      className={match.winner === 'B' ? 'winning-team' : undefined}
-                    >
-                      {playerName(match.teamB[0])} / {playerName(match.teamB[1])}
-                    </span>
-                  </p>
-                  <small>
-                    Base {match.baseDelta.toFixed(3)} | Team A{' '}
-                    {match.teamADelta >= 0 ? '+' : ''}
-                    {match.teamADelta.toFixed(3)} | Team B{' '}
-                    {match.teamBDelta >= 0 ? '+' : ''}
-                    {match.teamBDelta.toFixed(3)}
-                  </small>
-                </article>
-              ))}
-            </div>
-          </section>
             </>
           ) : (
             <div className="weekly-workspace">
@@ -1121,6 +1304,7 @@ function App() {
                           <th>Rank</th>
                           <th>Player</th>
                           <th>4DR</th>
+                          <th>4DR +/-</th>
                           <th>POS +/-</th>
                         </tr>
                       ) : (
@@ -1134,45 +1318,50 @@ function App() {
                     </thead>
                     <tbody>
                       {activeWeeklySnapshot
-                        ? activeWeeklySnapshot.players.map((player) => (
-                            <tr
-                              key={player.playerId}
-                              className={
-                                selectedWeeklyPlayerId === player.playerId
-                                  ? 'selected-row'
-                                  : ''
-                              }
-                              tabIndex={0}
-                              onClick={() => setSelectedWeeklyPlayerId(player.playerId)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault()
+                        ? activeWeeklySnapshot.players.map((player) => {
+                            const ratingChange = activeSnapshotRatingChanges.get(
+                              player.playerId,
+                            )
+
+                            return (
+                              <tr
+                                key={player.playerId}
+                                className={
+                                  selectedWeeklyPlayerId === player.playerId
+                                    ? 'selected-row'
+                                    : ''
+                                }
+                                tabIndex={0}
+                                onClick={() =>
                                   setSelectedWeeklyPlayerId(player.playerId)
                                 }
-                              }}
-                            >
-                              <td className="rank-cell">{player.rank}</td>
-                              <td>
-                                <strong>{player.name}</strong>
-                              </td>
-                              <td className="rating-cell">
-                                {formatRating(player.rating)}
-                              </td>
-                              <td>
-                                <span
-                                  className={
-                                    player.movement.startsWith('+')
-                                      ? 'movement positive'
-                                      : player.movement.startsWith('-')
-                                        ? 'movement negative'
-                                        : 'movement'
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    setSelectedWeeklyPlayerId(player.playerId)
                                   }
-                                >
-                                  {player.movement}
-                                </span>
-                              </td>
-                            </tr>
-                          ))
+                                }}
+                              >
+                                <td className="rank-cell">{player.rank}</td>
+                                <td>
+                                  <strong>{player.name}</strong>
+                                </td>
+                                <td className="rating-cell">
+                                  {formatRating(player.rating)}
+                                </td>
+                                <td>
+                                  <span className={movementClass(ratingChange)}>
+                                    {formatRatingChange(ratingChange)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className={movementClass(player.movement)}>
+                                    {player.movement}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })
                         : weeklyStandings.map((player, index) => {
                             const pointDifference =
                               player.pointsFor - player.pointsAgainst
@@ -1240,6 +1429,7 @@ function App() {
                 games={weeklyPlayerGames}
                 playerName={selectedWeeklyPlayerName}
                 snapshotPlayer={selectedWeeklySnapshotPlayer}
+                snapshotRatingChange={selectedWeeklySnapshotRatingChange}
                 computedPlayer={selectedWeeklyComputedPlayer}
               />
             </div>
@@ -1517,26 +1707,31 @@ function WeeklyPlayerDetail({
   games,
   playerName,
   snapshotPlayer,
+  snapshotRatingChange,
   computedPlayer,
 }: {
   games: WeeklyPlayerGame[]
   playerName: string
   snapshotPlayer?: WeeklySnapshot['players'][number]
+  snapshotRatingChange?: number | null
   computedPlayer?: WeeklyStanding
 }) {
   const wins = games.filter((game) => game.result === 'Win').length
   const losses = games.length - wins
   const pointsFor = games.reduce(
-    (total, game) => total + Number(game.scoreLabel.split('-')[0]),
+    (total, game) =>
+      total + (game.selectedTeam === 'A' ? game.scoreA : game.scoreB),
     0,
   )
   const pointsAgainst = games.reduce(
-    (total, game) => total + Number(game.scoreLabel.split('-')[1]),
+    (total, game) =>
+      total + (game.selectedTeam === 'A' ? game.scoreB : game.scoreA),
     0,
   )
-  const totalChange = roundRating(
+  const gameTotalChange = roundRating(
     games.reduce((total, game) => total + game.ratingChange, 0),
   )
+  const totalChange = snapshotRatingChange ?? gameTotalChange
 
   if (!playerName) {
     return (
@@ -1582,33 +1777,23 @@ function WeeklyPlayerDetail({
         </div>
         <div>
           <span>4DR move</span>
-          <strong className={totalChange >= 0 ? 'positive' : 'negative'}>
-            {totalChange >= 0 ? '+' : ''}
-            {totalChange.toFixed(3)}
+          <strong
+            className={
+              totalChange === null
+                ? undefined
+                : totalChange >= 0
+                  ? 'positive'
+                  : 'negative'
+            }
+          >
+            {formatRatingChange(totalChange)}
           </strong>
         </div>
       </div>
 
       <div className="weekly-games-list">
         {games.map((game) => (
-          <article className="weekly-game-card" key={game.id}>
-            <div>
-              <span className={game.result === 'Win' ? 'result-win' : 'result-loss'}>
-                {game.result}
-              </span>
-              <strong>{game.scoreLabel}</strong>
-            </div>
-            <p>
-              <b>With</b> {game.teamLabel}
-            </p>
-            <p>
-              <b>Against</b> {game.opponentLabel}
-            </p>
-            <small>
-              4DR {game.ratingChange >= 0 ? '+' : ''}
-              {game.ratingChange.toFixed(3)}
-            </small>
-          </article>
+          <WeeklyGameStatsCard game={game} key={game.id} />
         ))}
         {games.length === 0 ? (
           <div className="empty-table">
@@ -1617,6 +1802,184 @@ function WeeklyPlayerDetail({
         ) : null}
       </div>
     </aside>
+  )
+}
+
+function formatPercent(value: number) {
+  return `${(value * 100).toFixed(2)}%`
+}
+
+function formatSignedPoints(value: number) {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(3)}`
+}
+
+function formatGameRating(value: number) {
+  return (Math.round((value + Number.EPSILON) * 1000) / 1000).toFixed(3)
+}
+
+function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
+  const teamAIsWinner = game.winner === 'A'
+  const winnerTeam = teamAIsWinner ? game.teamA : game.teamB
+  const loserTeam = teamAIsWinner ? game.teamB : game.teamA
+  const winnerAverage = teamAIsWinner ? game.teamAStart : game.teamBStart
+  const loserAverage = teamAIsWinner ? game.teamBStart : game.teamAStart
+  const winnerProbability = teamAIsWinner
+    ? game.teamAWinProbability
+    : 1 - game.teamAWinProbability
+  const baseShare = 1 - winnerProbability
+  const marginBonus = Math.abs(game.scoreA - game.scoreB) * 0.001
+  const loserPointBonus = Math.min(game.scoreA, game.scoreB) * 0.001
+  const winnerDelta = teamAIsWinner ? game.teamADelta : game.teamBDelta
+  const loserDelta = teamAIsWinner ? game.teamBDelta : game.teamADelta
+  const scoreLabel = `${game.scoreA}-${game.scoreB}`
+
+  return (
+    <article className="weekly-game-card">
+      <div className="game-card-top">
+        <div>
+          <span className="eyebrow">Game #{game.gameNumber}</span>
+          <h3>{scoreLabel}</h3>
+        </div>
+        <span className={game.result === 'Win' ? 'result-win' : 'result-loss'}>
+          {game.result}
+        </span>
+      </div>
+
+      <div className="matchup-board" aria-label={`Game ${game.gameNumber} matchup`}>
+        <GameTeam
+          label="Team A"
+          players={game.teamA}
+          score={game.scoreA}
+          isWinner={teamAIsWinner}
+          selectedPlayerId={game.selectedPlayerId}
+        />
+        <div className="matchup-divider">vs</div>
+        <GameTeam
+          label="Team B"
+          players={game.teamB}
+          score={game.scoreB}
+          isWinner={!teamAIsWinner}
+          selectedPlayerId={game.selectedPlayerId}
+        />
+      </div>
+
+      <div className="game-stat-grid">
+        <div>
+          <span>Winners avg 4DR</span>
+          <strong>{formatGameRating(winnerAverage)}</strong>
+        </div>
+        <div>
+          <span>Losers avg 4DR</span>
+          <strong>{formatGameRating(loserAverage)}</strong>
+        </div>
+      </div>
+
+      <div className="probability-block">
+        <div className="probability-head">
+          <span>Win probability</span>
+          <strong>{formatPercent(winnerProbability)}</strong>
+        </div>
+        <div className="probability-track">
+          <span style={{ width: formatPercent(winnerProbability) }} />
+        </div>
+        <p>
+          {formatPercent(baseShare)} of 0.100 = {game.baseDelta.toFixed(3)}{' '}
+          4DR points
+        </p>
+      </div>
+
+      <table className="points-breakdown">
+        <thead>
+          <tr>
+            <th />
+            <th>4DR</th>
+            <th>Score</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Winners</th>
+            <td className="positive">{formatSignedPoints(game.baseDelta)}</td>
+            <td className="positive">{formatSignedPoints(marginBonus)}</td>
+            <td className="positive">{formatSignedPoints(winnerDelta)}</td>
+          </tr>
+          <tr>
+            <th>Losers</th>
+            <td className="negative">{formatSignedPoints(-game.baseDelta)}</td>
+            <td className="positive">{formatSignedPoints(loserPointBonus)}</td>
+            <td className={loserDelta >= 0 ? 'positive' : 'negative'}>
+              {formatSignedPoints(loserDelta)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table className="player-breakdown">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Start</th>
+            <th>+/-</th>
+            <th>Finish</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...winnerTeam, ...loserTeam].map((player) => (
+            <tr
+              className={player.id === game.selectedPlayerId ? 'selected-player' : ''}
+              key={`${game.id}-${player.id}`}
+            >
+              <th
+                className={
+                  winnerTeam.some((winner) => winner.id === player.id)
+                    ? 'positive'
+                    : 'negative'
+                }
+              >
+                {player.name}
+              </th>
+              <td>{formatGameRating(player.start)}</td>
+              <td className={player.change >= 0 ? 'positive' : 'negative'}>
+                {formatSignedPoints(player.change)}
+              </td>
+              <td>{formatGameRating(player.finish)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </article>
+  )
+}
+
+function GameTeam({
+  label,
+  players,
+  score,
+  isWinner,
+  selectedPlayerId,
+}: {
+  label: string
+  players: WeeklyPlayerGame['teamA']
+  score: number
+  isWinner: boolean
+  selectedPlayerId: string
+}) {
+  return (
+    <div className={isWinner ? 'game-team winner' : 'game-team'}>
+      <div>
+        <span>{label}</span>
+        <strong>{score}</strong>
+      </div>
+      {players.map((player) => (
+        <p
+          className={player.id === selectedPlayerId ? 'selected-player-name' : ''}
+          key={player.id}
+        >
+          {player.name}
+        </p>
+      ))}
+    </div>
   )
 }
 

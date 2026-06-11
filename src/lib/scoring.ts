@@ -30,8 +30,12 @@ export function formatRating(value: number) {
   return value.toFixed(3)
 }
 
+function clampProbability(value: number) {
+  return Math.min(1, Math.max(0, value))
+}
+
 export function probabilityForTeam(teamAverage: number, opponentAverage: number) {
-  return 0.5 + (teamAverage - opponentAverage) * 2
+  return clampProbability(0.5 + (teamAverage - opponentAverage) * 2)
 }
 
 export function calculateMatch<TMatch extends ScoringMatch>(
