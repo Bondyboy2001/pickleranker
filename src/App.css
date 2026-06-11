@@ -605,8 +605,7 @@ textarea:focus {
 
 .primary-button:disabled,
 .ghost-button:disabled,
-.icon-button:disabled,
-.delete-button:disabled {
+.icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }
@@ -709,26 +708,6 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.delete-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #9aaba2;
-  cursor: pointer;
-}
-
-.delete-button:hover {
-  border-color: rgba(180, 35, 24, 0.25);
-  background: #fdf1f0;
-  color: #b42318;
 }
 
 .result-card p .winning-team {

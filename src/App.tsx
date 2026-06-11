@@ -43,7 +43,6 @@ type Match = {
 
 type PlayerStanding = Player & {
   rating: number
-  previousRating: number
   wins: number
   losses: number
   games: number
@@ -102,12 +101,12 @@ type DbMatch = {
   imported: boolean
 }
 
-type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games' | 'points'
+type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games'
 type SortDirection = 'asc' | 'desc'
 
 const STORAGE_KEY = 'pickleranker-cardiff-data-v3'
 const DEFAULT_RATING = 3
-const LEADERBOARD_COLUMN_COUNT = 6
+const LEADERBOARD_COLUMN_COUNT = 5
 const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
@@ -145,17 +144,14 @@ function getInitialRating(player: Player) {
 
 function buildStandings(data: AppData) {
   const ratings = new Map<string, number>()
-  const previousRatings = new Map<string, number>()
   const standings = new Map<string, PlayerStanding>()
 
   data.players.forEach((player) => {
     const initialRating = getInitialRating(player)
     ratings.set(player.id, initialRating)
-    previousRatings.set(player.id, initialRating)
     standings.set(player.id, {
       ...player,
       rating: initialRating,
-      previousRating: initialRating,
       wins: 0,
       losses: 0,
       games: 0,
@@ -170,10 +166,6 @@ function buildStandings(data: AppData) {
   const summaries: MatchSummary[] = []
 
   sortedMatches.forEach((match) => {
-    data.players.forEach((player) => {
-      previousRatings.set(player.id, ratings.get(player.id) ?? player.skillLevel)
-    })
-
     const summary = calculateMatch(match, ratings)
     summaries.push(summary)
 
@@ -216,7 +208,6 @@ function buildStandings(data: AppData) {
 
   standings.forEach((standing, playerId) => {
     standing.rating = ratings.get(playerId) ?? standing.skillLevel
-    standing.previousRating = previousRatings.get(playerId) ?? standing.skillLevel
   })
 
   return {
@@ -882,12 +873,6 @@ function App() {
                         onSort={toggleSort}
                       />
                       <SortableHeader
-                        label="+/- from 3.0"
-                        sortKey="rating"
-                        activeSort={sort}
-                        onSort={toggleSort}
-                      />
-                      <SortableHeader
                         label="W-L"
                         sortKey="record"
                         activeSort={sort}
@@ -908,7 +893,6 @@ function App() {
                         ? buildPlayerWeekPoints(player.id, summaries)
                         : []
                       const rank = rankByPlayerId.get(player.id) ?? 0
-                      const ratingChange = player.rating - DEFAULT_RATING
 
                       return (
                         <Fragment key={player.id}>
@@ -941,18 +925,6 @@ function App() {
                             </td>
                             <td className="rating-cell">
                               {formatRating(player.rating)}
-                            </td>
-                            <td>
-                              <span
-                                className={
-                                  ratingChange >= 0
-                                    ? 'movement positive'
-                                    : 'movement negative'
-                                }
-                              >
-                                {ratingChange >= 0 ? '+' : ''}
-                                {ratingChange.toFixed(3)}
-                              </span>
                             </td>
                             <td>
                               {player.wins}-{player.losses}
@@ -1419,13 +1391,6 @@ function sortStandings(
         result = aRate - bRate || a.player.wins - b.player.wins
       }
       if (key === 'games') result = a.player.games - b.player.games
-      if (key === 'points') {
-        result =
-          a.player.pointsFor -
-          a.player.pointsAgainst -
-          (b.player.pointsFor - b.player.pointsAgainst)
-      }
-
       return result * directionMultiplier || a.rankIndex - b.rankIndex
     })
     .map((item) => item.player)
