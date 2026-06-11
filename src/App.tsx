@@ -4,8 +4,10 @@ import {
   LogIn,
   LogOut,
   LineChart,
+  Moon,
   Plus,
   Save,
+  Sun,
   Trophy,
   Users,
 } from 'lucide-react'
@@ -149,6 +151,7 @@ type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games'
 type SortDirection = 'asc' | 'desc'
 
 const STORAGE_KEY = 'pickleranker-cardiff-data-v3'
+const THEME_STORAGE_KEY = 'pickleranker-theme'
 const DEFAULT_RATING = 3
 const LEADERBOARD_COLUMN_COUNT = 5
 const ADMIN_USERNAME = 'ben'
@@ -836,6 +839,9 @@ async function loadRemoteData(): Promise<AppData> {
 function App() {
   const [data, setData] = useState<AppData>(() => loadData())
   const [route, setRoute] = useState(() => window.location.hash || '#/')
+  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
+    localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light',
+  )
   const [session, setSession] = useState<Session | null>(null)
   const [authForm, setAuthForm] = useState({ email: '', password: '' })
   const [authError, setAuthError] = useState('')
@@ -860,6 +866,11 @@ function App() {
   const [search, setSearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
   const canEdit = !isSupabaseConfigured || Boolean(session)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }, [theme])
 
   useEffect(() => {
     const onHashChange = () => setRoute(window.location.hash || '#/')
@@ -1174,11 +1185,21 @@ function App() {
             <span className="brand-mark">PR</span>
             <div>
               <h1>pickleranker</h1>
-              <p>David Lloyd Cardiff 4DR rankings with weekly score history.</p>
             </div>
           </div>
         </div>
         <div className="topbar-actions">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={() =>
+              setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+            }
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
           <a className="ghost-link" href={route === '#/admin' ? '#/' : '#/admin'}>
             {route === '#/admin' ? 'View public site' : 'Admin login'}
           </a>

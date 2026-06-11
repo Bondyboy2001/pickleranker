@@ -1,13 +1,62 @@
 :root {
+  --bg: #eef5f0;
+  --bg-soft: #f7fbf8;
+  --surface: #ffffff;
+  --surface-alt: #f8fbf9;
+  --surface-elevated: #ffffff;
+  --text: #1f3128;
+  --text-strong: #0f2118;
+  --muted: #66756d;
+  --border: #d8e5de;
+  --border-strong: #c2d3ca;
+  --accent: #0d8a52;
+  --accent-strong: #086d41;
+  --accent-soft: #e8f8ef;
+  --accent-tint: rgba(13, 138, 82, 0.12);
+  --danger: #b42318;
+  --danger-soft: #fdf1f0;
+  --warning: #b8830c;
+  --table-head: #f2f8f4;
+  --row-hover: #f6fcf8;
+  --selected-row: linear-gradient(90deg, rgba(232, 248, 239, 0.96), #ffffff 64%);
+  --shadow: 0 18px 48px rgba(17, 52, 34, 0.08);
+  --shadow-soft: 0 8px 24px rgba(17, 52, 34, 0.08);
+  --focus: rgba(21, 147, 92, 0.18);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  color: #17261f;
-  background: #f3f7f4;
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='dark'] {
+  --bg: #08110d;
+  --bg-soft: #0d1813;
+  --surface: #111f18;
+  --surface-alt: #14251d;
+  --surface-elevated: #162a21;
+  --text: #d9e7df;
+  --text-strong: #f1f8f4;
+  --muted: #93a59b;
+  --border: #24382f;
+  --border-strong: #345448;
+  --accent: #7ee28f;
+  --accent-strong: #a5f05b;
+  --accent-soft: rgba(126, 226, 143, 0.12);
+  --accent-tint: rgba(126, 226, 143, 0.16);
+  --danger: #ff8f86;
+  --danger-soft: rgba(255, 143, 134, 0.12);
+  --warning: #f0c15a;
+  --table-head: #172920;
+  --row-hover: #172b22;
+  --selected-row: linear-gradient(90deg, rgba(45, 91, 67, 0.72), rgba(17, 31, 24, 0.95) 68%);
+  --shadow: 0 18px 52px rgba(0, 0, 0, 0.34);
+  --shadow-soft: 0 8px 26px rgba(0, 0, 0, 0.26);
+  --focus: rgba(126, 226, 143, 0.22);
 }
 
 * {
@@ -18,6 +67,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  background:
+    radial-gradient(circle at top left, var(--accent-tint), transparent 340px),
+    linear-gradient(180deg, var(--bg-soft), var(--bg));
 }
 
 button,
