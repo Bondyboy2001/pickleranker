@@ -68,8 +68,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, var(--accent-tint), transparent 340px),
-    linear-gradient(180deg, var(--bg-soft), var(--bg));
+    radial-gradient(circle at top left, var(--accent-tint), transparent 360px),
+    linear-gradient(135deg, #06110c, #08110d 44%, var(--bg));
 }
 
 button,

@@ -1,15 +1,19 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  ArrowUpDown,
+  CalendarDays,
+  CircleHelp,
   LogIn,
   LogOut,
   LineChart,
   Moon,
   Plus,
   Save,
+  Search,
+  SlidersHorizontal,
   Sun,
   Trophy,
-  Users,
 } from 'lucide-react'
 import './App.css'
 import { cardiffSeedData } from './data/cardiffSeed'
@@ -147,13 +151,13 @@ type DbMatch = {
   imported: boolean
 }
 
-type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games'
+type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games' | 'wins' | 'losses'
 type SortDirection = 'asc' | 'desc'
 
 const STORAGE_KEY = 'pickleranker-cardiff-data-v3'
 const THEME_STORAGE_KEY = 'pickleranker-theme'
 const DEFAULT_RATING = 3
-const LEADERBOARD_COLUMN_COUNT = 5
+const LEADERBOARD_COLUMN_COUNT = 8
 const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
@@ -257,6 +261,23 @@ function buildSnapshotRatingChanges(snapshots: WeeklySnapshot[]) {
 function formatRatingChange(change: number | null | undefined) {
   if (change === null || change === undefined) return '-'
   return `${change >= 0 ? '+' : ''}${change.toFixed(3)}`
+}
+
+function formatWinRate(wins: number, games: number) {
+  if (games === 0) return '0.0%'
+  return `${((wins / games) * 100).toFixed(1)}%`
+}
+
+function formatSnapshotDate(label: string | undefined) {
+  if (!label) return '-'
+  const [day, month, year] = label.split('-')
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (Number.isNaN(date.getTime())) return label
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
 }
 
 function movementClass(value: string | number | null | undefined) {
@@ -930,6 +951,10 @@ function App() {
     () => snapshotRatingChanges.get(activeWeek) ?? new Map<string, number | null>(),
     [activeWeek, snapshotRatingChanges],
   )
+  const averageRating = useMemo(() => {
+    if (standings.length === 0) return 0
+    return standings.reduce((total, player) => total + player.rating, 0) / standings.length
+  }, [standings])
   const weeklyStandings = useMemo(
     () => buildWeeklyStandings(activeWeek, summaries, data.players),
     [activeWeek, summaries, data.players],
@@ -1123,18 +1148,49 @@ function App() {
     }))
   }
 
+  function setSortFromValue(value: string) {
+    const [key, direction] = value.split(':') as [SortKey, SortDirection]
+    setSort({ key, direction })
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
           <div className="brand-lockup">
-            <span className="brand-mark">PR</span>
+            <span className="brand-mark" aria-hidden="true">
+              <span className="brand-paddle">P</span>
+            </span>
             <div>
-              <h1>pickleranker</h1>
+              <h1>PICKLERANKER</h1>
             </div>
           </div>
         </div>
         <div className="topbar-actions">
+          {route !== '#/admin' ? (
+            <div className="view-tabs header-tabs" role="tablist" aria-label="Leaderboard views">
+              <button
+                type="button"
+                className={activePublicTab === 'overall' ? 'active' : ''}
+                onClick={() => setActivePublicTab('overall')}
+              >
+                Leaderboard
+              </button>
+              <button
+                type="button"
+                className={activePublicTab === 'weekly' ? 'active' : ''}
+                onClick={() => setActivePublicTab('weekly')}
+              >
+                Weekly
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePublicTab('overall')}
+              >
+                Players
+              </button>
+            </div>
+          ) : null}
           <button
             type="button"
             className="theme-toggle"
@@ -1146,7 +1202,7 @@ function App() {
           >
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <a className="ghost-link" href={route === '#/admin' ? '#/' : '#/admin'}>
+          <a className="ghost-link admin-link" href={route === '#/admin' ? '#/' : '#/admin'}>
             {route === '#/admin' ? 'View public site' : 'Admin login'}
           </a>
         </div>
@@ -1173,69 +1229,74 @@ function App() {
           addPlayer={addPlayer}
         />
       ) : (
-        <>
+        <div className="public-dashboard">
           <section className="summary-strip" aria-label="League summary">
-            <div>
-              <span>
-                <Users size={15} />
-                Players
+            <div className="summary-card">
+              <span className="summary-icon">
+                <Trophy size={28} />
               </span>
-              <strong>{data.players.length}</strong>
+              <div>
+                <span>Top rated</span>
+                <strong>{standings[0]?.name ?? '-'}</strong>
+                <b>{standings[0] ? formatRating(standings[0].rating) : '0.000'}</b>
+              </div>
             </div>
-            <div>
-              <span>
-                <LineChart size={15} />
-                Games logged
+            <div className="summary-card">
+              <span className="summary-icon">
+                <LineChart size={28} />
               </span>
-              <strong>{data.matches.length}</strong>
+              <div>
+                <span>Average 4DR</span>
+                <strong>{averageRating.toFixed(3)}</strong>
+                <small>Across {data.players.length} players</small>
+              </div>
             </div>
-            <div>
-              <span>
-                <Trophy size={15} />
-                Top 4DR
+            <div className="summary-card">
+              <span className="summary-icon">
+                <CalendarDays size={28} />
               </span>
-              <strong>
-                {standings[0] ? formatRating(standings[0].rating) : '0.000'}
-              </strong>
+              <div>
+                <span>Last updated</span>
+                <strong>{formatSnapshotDate(activeWeeklySnapshot?.label)}</strong>
+                <small>{data.matches.length} saved games</small>
+              </div>
             </div>
           </section>
 
-          <div className="view-tabs" role="tablist" aria-label="Leaderboard views">
-            <button
-              type="button"
-              className={activePublicTab === 'overall' ? 'active' : ''}
-              onClick={() => setActivePublicTab('overall')}
-            >
-              Overall leaderboard
-            </button>
-            <button
-              type="button"
-              className={activePublicTab === 'weekly' ? 'active' : ''}
-              onClick={() => setActivePublicTab('weekly')}
-            >
-              Weekly leaderboard
-            </button>
-          </div>
-
           {activePublicTab === 'overall' ? (
             <>
-              <section className="panel leaderboard-panel">
-                <div className="panel-heading">
-                  <div>
-                    <h2>Leaderboard</h2>
-                    <p>Overall 4DR leaderboard. Click a player for rating history.</p>
-                  </div>
-                  <input
-                    type="search"
-                    className="search-input"
-                    placeholder="Find player..."
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    aria-label="Find player"
-                  />
+              <section className="panel leaderboard-panel dashboard-table-panel">
+                <div className="leaderboard-toolbar">
+                  <label className="search-control">
+                    <Search size={18} />
+                    <input
+                      type="search"
+                      placeholder="Search players..."
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      aria-label="Search players"
+                    />
+                  </label>
+                  <button type="button" className="toolbar-select">
+                    <SlidersHorizontal size={16} />
+                    All Players
+                  </button>
+                  <label className="sort-control">
+                    <ArrowUpDown size={17} />
+                    <select
+                      value={`${sort.key}:${sort.direction}`}
+                      onChange={(event) => setSortFromValue(event.target.value)}
+                      aria-label="Sort leaderboard"
+                    >
+                      <option value="rating:desc">Sort by 4DR</option>
+                      <option value="record:desc">Sort by win %</option>
+                      <option value="games:desc">Sort by games</option>
+                      <option value="player:asc">Sort by player</option>
+                    </select>
+                  </label>
                 </div>
                 <div className="table-wrap">
-                  <table>
+                  <table className="leaderboard-table">
                     <thead>
                       <tr>
                         <SortableHeader
@@ -1251,20 +1312,38 @@ function App() {
                           onSort={toggleSort}
                         />
                         <SortableHeader
-                          label="4DR"
+                          label="4DR Rating"
                           sortKey="rating"
                           activeSort={sort}
                           onSort={toggleSort}
                         />
+                        <th>
+                          <span className="table-help-label">
+                            4DR +/-
+                            <CircleHelp size={14} />
+                          </span>
+                        </th>
                         <SortableHeader
-                          label="W-L"
-                          sortKey="record"
+                          label="Wins"
+                          sortKey="wins"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableHeader
+                          label="Losses"
+                          sortKey="losses"
                           activeSort={sort}
                           onSort={toggleSort}
                         />
                         <SortableHeader
                           label="Games"
                           sortKey="games"
+                          activeSort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableHeader
+                          label="Win %"
+                          sortKey="record"
                           activeSort={sort}
                           onSort={toggleSort}
                         />
@@ -1281,6 +1360,7 @@ function App() {
                             )
                           : []
                         const rank = rankByPlayerId.get(player.id) ?? 0
+                        const ratingChange = activeSnapshotRatingChanges.get(player.id) ?? 0
 
                         return (
                           <Fragment key={player.id}>
@@ -1302,6 +1382,7 @@ function App() {
                               }}
                             >
                               <td
+                                data-rank={rank}
                                 className={`rank-cell rank-pos-${
                                   rank <= 3 ? rank : 'other'
                                 }`}
@@ -1309,15 +1390,25 @@ function App() {
                                 {rank}
                               </td>
                               <td>
-                                <strong>{player.name}</strong>
+                                <div className="player-cell">
+                                  <span className="player-avatar" aria-hidden="true">
+                                    {player.name.slice(0, 1)}
+                                  </span>
+                                  <strong>{player.name}</strong>
+                                </div>
                               </td>
                               <td className="rating-cell">
                                 {formatRating(player.rating)}
                               </td>
                               <td>
-                                {player.wins}-{player.losses}
+                                <span className={movementClass(ratingChange)}>
+                                  {formatRatingChange(ratingChange)}
+                                </span>
                               </td>
+                              <td>{player.wins}</td>
+                              <td>{player.losses}</td>
                               <td>{player.games}</td>
+                              <td>{formatWinRate(player.wins, player.games)}</td>
                             </tr>
                             {isSelected ? (
                               <tr className="expanded-row">
@@ -1512,7 +1603,7 @@ function App() {
               />
             </div>
           )}
-        </>
+        </div>
       )}
     </main>
   )
@@ -2081,6 +2172,8 @@ function sortStandings(
         const bRate = b.player.games ? b.player.wins / b.player.games : 0
         result = aRate - bRate || a.player.wins - b.player.wins
       }
+      if (key === 'wins') result = a.player.wins - b.player.wins
+      if (key === 'losses') result = a.player.losses - b.player.losses
       if (key === 'games') result = a.player.games - b.player.games
       return result * directionMultiplier || a.rankIndex - b.rankIndex
     })
