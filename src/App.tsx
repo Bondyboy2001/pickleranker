@@ -1479,7 +1479,7 @@ function App() {
                           <th>Rank</th>
                           <th>Player</th>
                           <th>Weekly +/-</th>
-                          <th>W-L</th>
+                          <th>Diff</th>
                         </tr>
                       )}
                     </thead>
@@ -1534,6 +1534,7 @@ function App() {
                         : weeklyStandings.map((player, index) => {
                             const pointDifference =
                               player.pointsFor - player.pointsAgainst
+                            const recordDifference = player.wins - player.losses
 
                             return (
                               <tr
@@ -1577,7 +1578,10 @@ function App() {
                                   </span>
                                 </td>
                                 <td>
-                                  {player.wins}-{player.losses}
+                                  <span className={movementClass(recordDifference)}>
+                                    {recordDifference >= 0 ? '+' : ''}
+                                    {recordDifference}
+                                  </span>
                                 </td>
                               </tr>
                             )
