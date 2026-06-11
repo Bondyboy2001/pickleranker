@@ -6,10 +6,10 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background:
-    radial-gradient(circle at top left, rgba(126, 226, 143, 0.09), transparent 330px),
+    radial-gradient(circle at top left, var(--shell-glow), transparent 330px),
     var(--surface);
   color: var(--text);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow);
 }
 
 .topbar {
@@ -34,6 +34,10 @@
   max-height: 78px;
   object-fit: contain;
   object-position: left center;
+}
+
+:root[data-theme='dark'] .brand-logo {
+  filter: invert(1) brightness(1.2) contrast(0.92);
 }
 
 .topbar p,
@@ -201,7 +205,7 @@ td span {
 
 :root[data-theme='dark'] .view-tabs button.active {
   background: var(--accent-strong);
-  color: #08110d;
+  color: #101317;
 }
 
 .header-tabs {
@@ -342,12 +346,12 @@ th {
 }
 
 .leaderboard-table th {
-  background: #073f29;
-  color: rgba(255, 255, 255, 0.88);
+  background: var(--table-head);
+  color: var(--table-head-text);
 }
 
 :root[data-theme='dark'] .leaderboard-table th {
-  background: #070d0a;
+  background: var(--table-head);
 }
 
 .leaderboard-table td {
@@ -544,7 +548,7 @@ tbody tr.expanded-row:hover {
   gap: 18px;
   padding: 18px;
   background:
-    linear-gradient(135deg, var(--accent-tint), rgba(200, 243, 109, 0.12)),
+    linear-gradient(135deg, var(--accent-tint), var(--panel-wash)),
     var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -974,7 +978,7 @@ select:focus {
   padding: 18px;
   border-bottom: 1px solid var(--border);
   background:
-    linear-gradient(135deg, var(--accent-tint), rgba(200, 243, 109, 0.09)),
+    linear-gradient(135deg, var(--accent-tint), var(--panel-wash)),
     var(--surface);
 }
 
@@ -1044,7 +1048,7 @@ select:focus {
   border: 1px solid var(--border);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(246, 250, 247, 0.68), rgba(255, 255, 255, 0)),
+    linear-gradient(180deg, var(--card-wash), rgba(255, 255, 255, 0)),
     var(--surface);
 }
 
