@@ -1,6 +1,6 @@
 # pickleranker
 
-pickleranker is a public pickleball ranking website for David Lloyd Cardiff 4DR scores.
+pickleranker is a public pickleball ranking website using 4DR scoring.
 
 The app has two views:
 
@@ -32,10 +32,9 @@ See [DEPLOY.md](./DEPLOY.md) for the full website setup:
 
 1. Create a Supabase project.
 2. Run `supabase/schema.sql`.
-3. Run `supabase/seed-cardiff.sql`.
-4. Create an auth user for the admin.
-5. Add that user to `public.admin_users`.
-6. Deploy the Vite app to Vercel or Netlify.
+3. Create an auth user for the admin.
+4. Add that user to `public.admin_users`.
+5. Deploy the Vite app to Vercel or Netlify.
 
 ## Scripts
 
@@ -44,11 +43,4 @@ npm run dev
 npm run build
 npm run lint
 npm run verify:scoring
-```
-
-Seed maintenance:
-
-```bash
-npm run scrape:cardiff
-npm run export:supabase-seed
 ```

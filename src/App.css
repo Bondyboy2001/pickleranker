@@ -24,20 +24,118 @@
 
 .brand-lockup {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-title {
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
+}
+
+.brand-subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.notice-banner {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 28px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.brand-logo {
+.notice-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.load-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 28px 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.load-banner.error {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recent-matches-panel {
+  grid-column: 1 / -1;
+}
+
+.recent-matches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recent-match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+.recent-match-row strong {
   display: block;
-  width: clamp(180px, 22vw, 300px);
-  height: auto;
-  max-height: 78px;
-  object-fit: contain;
-  object-position: left center;
+  margin-bottom: 4px;
 }
 
-:root[data-theme='dark'] .brand-logo {
-  filter: invert(1) brightness(1.2) contrast(0.92);
+.recent-match-row span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.recent-match-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button.danger {
+  color: var(--danger);
 }
 
 .topbar p,
@@ -1094,6 +1192,11 @@ select:focus {
   background: var(--accent-soft);
 }
 
+.game-team.loser {
+  border-color: color-mix(in srgb, var(--danger) 22%, transparent);
+  background: var(--danger-soft);
+}
+
 .game-team div {
   display: flex;
   align-items: center;
@@ -1319,9 +1422,8 @@ select:focus {
     padding: 20px 14px;
   }
 
-  .brand-logo {
-    width: min(240px, 72vw);
-    max-height: 70px;
+  .brand-title {
+    font-size: 1.45rem;
   }
 
   .topbar-actions {

@@ -1,6 +1,6 @@
 # pickleranker Website Setup
 
-This app is already built to run as a public website:
+This app is built to run as a public website:
 
 - Public visitors open the leaderboard and recent results.
 - Admins go to `/#/admin`, sign in, and add players or match scores.
@@ -12,7 +12,18 @@ This app is already built to run as a public website:
 1. Go to Supabase and create a new project.
 2. Open SQL Editor.
 3. Run `supabase/schema.sql`.
-4. Run `supabase/seed-cardiff.sql` once to load the current Cardiff players and matches.
+
+If you already deployed an older schema with `imported_*` columns, you can drop them:
+
+```sql
+alter table public.players
+  drop column if exists imported_rating,
+  drop column if exists imported_rank,
+  drop column if exists imported_movement;
+
+alter table public.matches
+  drop column if exists imported;
+```
 
 ## 2. Create The Admin Login
 
@@ -90,17 +101,11 @@ Open `http://127.0.0.1:5173/` for the public site and `http://127.0.0.1:5173/#/a
 
 - Share the deployed URL with anyone who should view the leaderboard.
 - Use `https://your-site.com/#/admin` to sign in as admin.
-- Add weekly games from the admin page.
+- Add players, then add weekly games from the admin page.
+- Edit or delete recent games from the admin page if needed.
 - The leaderboard recalculates from saved games automatically.
 
 ## Useful Commands
-
-Refresh scraped Cardiff seed:
-
-```bash
-npm run scrape:cardiff
-npm run export:supabase-seed
-```
 
 Verify scoring:
 

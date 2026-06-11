@@ -2,9 +2,6 @@ create table if not exists public.players (
   id text primary key,
   name text not null,
   skill_level numeric not null default 3.0,
-  imported_rating numeric,
-  imported_rank integer,
-  imported_movement text,
   created_at timestamptz not null default now()
 );
 
@@ -18,7 +15,6 @@ create table if not exists public.matches (
   team_b2 text not null references public.players(id) on delete restrict,
   score_a integer not null check (score_a >= 0),
   score_b integer not null check (score_b >= 0),
-  imported boolean not null default false,
   created_at timestamptz not null default now(),
   check (score_a <> score_b),
   check (team_a1 <> team_a2),

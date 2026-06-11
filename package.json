@@ -8,8 +8,6 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "scrape:cardiff": "tsx scripts/scrape-cardiff-data.ts",
-    "export:supabase-seed": "tsx scripts/export-supabase-seed-sql.ts",
     "verify:scoring": "tsx scripts/verify-4dr-scoring.ts"
   },
   "dependencies": {
@@ -28,7 +26,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "playwright": "^1.60.0",
     "tsx": "^4.22.4",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",

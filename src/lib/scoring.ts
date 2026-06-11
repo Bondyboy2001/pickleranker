@@ -6,7 +6,6 @@ export type ScoringMatch = {
   teamB: [string, string]
   scoreA: number
   scoreB: number
-  imported?: boolean
 }
 
 export type MatchSummary<TMatch extends ScoringMatch = ScoringMatch> = TMatch & {
