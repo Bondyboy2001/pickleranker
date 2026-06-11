@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  ArrowUpDown,
   CalendarDays,
   LogIn,
   LogOut,
@@ -1141,11 +1140,6 @@ function App() {
     }))
   }
 
-  function setSortFromValue(value: string) {
-    const [key, direction] = value.split(':') as [SortKey, SortDirection]
-    setSort({ key, direction })
-  }
-
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -1267,19 +1261,6 @@ function App() {
                     <SlidersHorizontal size={16} />
                     All Players
                   </button>
-                  <label className="sort-control">
-                    <ArrowUpDown size={17} />
-                    <select
-                      value={`${sort.key}:${sort.direction}`}
-                      onChange={(event) => setSortFromValue(event.target.value)}
-                      aria-label="Sort leaderboard"
-                    >
-                      <option value="rating:desc">Sort by 4DR</option>
-                      <option value="record:desc">Sort by win %</option>
-                      <option value="games:desc">Sort by games</option>
-                      <option value="player:asc">Sort by player</option>
-                    </select>
-                  </label>
                 </div>
                 <div className="table-wrap">
                   <table className="leaderboard-table">

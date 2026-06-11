@@ -253,7 +253,7 @@ td span {
 
 .leaderboard-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 360px) 190px minmax(170px, 220px);
+  grid-template-columns: minmax(220px, 360px) 190px;
   justify-content: space-between;
   gap: 18px;
   padding: 18px 22px;
@@ -262,7 +262,6 @@ td span {
 }
 
 .search-control,
-.sort-control,
 .toolbar-select {
   display: inline-flex;
   align-items: center;
@@ -280,7 +279,7 @@ td span {
 }
 
 .search-control input,
-.sort-control select {
+.search-control input {
   height: auto;
   padding: 0;
   border: 0;
@@ -288,8 +287,7 @@ td span {
   box-shadow: none;
 }
 
-.search-control input:focus,
-.sort-control select:focus {
+.search-control input:focus {
   box-shadow: none;
 }
 
@@ -380,17 +378,17 @@ th {
 }
 
 .sort-button span {
-  color: var(--muted);
+  color: color-mix(in srgb, var(--table-head-text) 70%, var(--table-head) 30%);
   font-size: 12px;
   line-height: 1;
 }
 
 .sort-button.active {
-  color: var(--accent-strong);
+  color: var(--table-head-text);
 }
 
 .sort-button.active span {
-  color: var(--accent-strong);
+  color: var(--accent-warm);
 }
 
 td {
