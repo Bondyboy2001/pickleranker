@@ -108,6 +108,8 @@ type SortDirection = 'asc' | 'desc'
 const STORAGE_KEY = 'pickleranker-cardiff-data-v3'
 const DEFAULT_RATING = 3
 const LEADERBOARD_COLUMN_COUNT = 6
+const ADMIN_USERNAME = 'ben'
+const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
 const seededData = cardiffSeedData as unknown as AppData
 
@@ -521,7 +523,13 @@ function App() {
     event.preventDefault()
     if (!supabase) return
     setAuthError('')
-    const { error } = await supabase.auth.signInWithPassword(authForm)
+    const login = authForm.email.trim()
+    const email =
+      login.toLowerCase() === ADMIN_USERNAME ? ADMIN_AUTH_EMAIL : login
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: authForm.password,
+    })
     if (error) {
       setAuthError(error.message)
       return
@@ -1174,8 +1182,8 @@ function AdminPage({
           ) : (
             <form className="admin-form" onSubmit={signIn}>
               <input
-                type="email"
-                placeholder="Admin email"
+                type="text"
+                placeholder="Username"
                 value={authForm.email}
                 onChange={(event) =>
                   setAuthForm({ ...authForm, email: event.target.value })
