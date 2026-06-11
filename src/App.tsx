@@ -8,7 +8,6 @@ import {
   Moon,
   Pencil,
   Plus,
-  RefreshCw,
   Save,
   Search,
   Sun,
@@ -448,17 +447,6 @@ function App() {
                 Weekly
               </button>
             </div>
-          ) : null}
-          {isSupabaseConfigured && route !== '#/admin' ? (
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => refreshRemoteData('Leaderboard refreshed.')}
-              aria-label="Refresh leaderboard"
-              title="Refresh leaderboard"
-            >
-              <RefreshCw size={17} />
-            </button>
           ) : null}
           <button
             type="button"
