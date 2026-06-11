@@ -800,6 +800,10 @@ tbody tr.expanded-row:hover {
   gap: 12px;
 }
 
+.game-entry-row {
+  grid-template-columns: minmax(220px, 1fr);
+}
+
 .team-entry-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -837,31 +841,6 @@ tbody tr.expanded-row:hover {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-alt);
-}
-
-.score-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.score-presets button {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.score-presets button:hover,
-.score-presets button.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
 }
 
 .game-entry-form .primary-button,

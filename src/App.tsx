@@ -295,19 +295,13 @@ function formatPositionMovement(previousRank: number | undefined, currentRank: n
   return movement > 0 ? `+${movement}` : String(movement)
 }
 
-function nextWeekLabel(matches: Match[]) {
-  const highest = matches.reduce((max, match) => {
-    const numbered = match.week.match(/week\s*(\d+)/i)
-    return numbered ? Math.max(max, Number(numbered[1])) : max
-  }, 0)
-  if (highest > 0) return `Week ${highest + 1}`
-  // Seed data labels weeks "Results DD-MM-YYYY"; follow that convention.
-  const [year, month, day] = new Date().toISOString().slice(0, 10).split('-')
+function formatResultsLabel(playedOn: string) {
+  const [year, month, day] = playedOn.split('-')
+  if (!year || !month || !day) return 'Unlabelled week'
   return `Results ${day}-${month}-${year}`
 }
 
 const emptyMatch = {
-  week: '',
   playedOn: new Date().toISOString().slice(0, 10),
   teamA1: '',
   teamA2: '',
@@ -878,10 +872,7 @@ function App() {
     key: 'rank',
     direction: 'asc',
   })
-  const [matchForm, setMatchForm] = useState(() => ({
-    ...emptyMatch,
-    week: nextWeekLabel(loadData().matches),
-  }))
+  const [matchForm, setMatchForm] = useState(emptyMatch)
   const [matchError, setMatchError] = useState('')
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
   const [search, setSearch] = useState('')
@@ -1101,6 +1092,10 @@ function App() {
       setMatchError('Each player can only appear once in a game.')
       return
     }
+    if (!matchForm.playedOn) {
+      setMatchError('Pick a date before saving.')
+      return
+    }
     if (scoreA < 0 || scoreB < 0) {
       setMatchError('Scores cannot be negative.')
       return
@@ -1113,7 +1108,7 @@ function App() {
 
     const match: Match = {
       id: makeId('m'),
-      week: matchForm.week.trim() || 'Unlabelled week',
+      week: formatResultsLabel(matchForm.playedOn),
       playedOn: matchForm.playedOn,
       teamA: [matchForm.teamA1, matchForm.teamA2],
       teamB: [matchForm.teamB1, matchForm.teamB2],
@@ -1135,7 +1130,6 @@ function App() {
     )
     setMatchForm((current) => ({
       ...emptyMatch,
-      week: current.week,
       playedOn: current.playedOn,
     }))
   }
@@ -1182,12 +1176,6 @@ function App() {
                 onClick={() => setActivePublicTab('weekly')}
               >
                 Weekly
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePublicTab('overall')}
-              >
-                Players
               </button>
             </div>
           ) : null}
@@ -1723,16 +1711,10 @@ function AdminPage({
           <form className="game-entry-form" onSubmit={addMatch}>
             <div className="game-entry-row">
               <label>
-                Week
-                <input
-                  value={matchForm.week}
-                  onChange={(event) => updateMatchForm({ week: event.target.value })}
-                />
-              </label>
-              <label>
                 Date
                 <input
                   type="date"
+                  required
                   value={matchForm.playedOn}
                   onChange={(event) =>
                     updateMatchForm({ playedOn: event.target.value })
@@ -1798,31 +1780,6 @@ function AdminPage({
                     }
                   />
                 </label>
-              </div>
-              <div className="score-presets" aria-label="Quick scores">
-                {[
-                  ['11', '0'],
-                  ['11', '5'],
-                  ['11', '7'],
-                  ['11', '9'],
-                  ['12', '10'],
-                ].map(([winnerScore, loserScore]) => (
-                  <button
-                    type="button"
-                    className={
-                      matchForm.scoreA === winnerScore &&
-                      matchForm.scoreB === loserScore
-                        ? 'active'
-                        : ''
-                    }
-                    key={`${winnerScore}-${loserScore}`}
-                    onClick={() =>
-                      updateMatchForm({ scoreA: winnerScore, scoreB: loserScore })
-                    }
-                  >
-                    {winnerScore}-{loserScore}
-                  </button>
-                ))}
               </div>
             </section>
 
