@@ -108,6 +108,58 @@
   border-radius: 14px;
 }
 
+.recent-games-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.recent-games-weeks .empty-table {
+  padding: 18px 0;
+}
+
+.week-subwindow {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-alt);
+}
+
+.week-subwindow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  background: var(--surface-alt);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+}
+
+.week-subwindow-header:hover {
+  background: var(--surface-elevated);
+}
+
+.week-title {
+  flex: 1;
+}
+
+.week-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.week-subwindow .table-wrap {
+  border-top: 1px solid var(--border);
+}
+
 .recent-games-table {
   width: 100%;
   border-collapse: collapse;
@@ -354,6 +406,11 @@ td span {
 .login-panel {
   width: min(560px, 100%);
   max-width: 560px;
+  padding: 0 18px 18px;
+}
+
+.login-panel > .panel-heading {
+  margin: 0 -18px;
 }
 
 .admin-grid {
@@ -1526,6 +1583,11 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 0 18px 18px;
+}
+
+.tournament-panel > .panel-heading {
+  margin: 0 -18px;
 }
 
 .tournament-setup-row {

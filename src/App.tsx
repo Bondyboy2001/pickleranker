@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   LineChart,
   LogIn,
   LogOut,
@@ -832,6 +834,7 @@ function AdminPage({
   deleteMatch: (matchId: string) => void
 }) {
   const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
 
   const updateMatchForm = (next: Partial<MatchFormState>) => {
     setMatchForm({ ...matchForm, ...next })
@@ -1056,72 +1059,99 @@ function AdminPage({
           <div className="panel-heading">
             <div>
               <h2>Recent games</h2>
-              <p>Edit or delete saved games.</p>
+              <p>Edit or delete saved games grouped by week.</p>
             </div>
           </div>
-          <div className="table-wrap">
-            <table className="recent-games-table">
-              <thead>
-                <tr>
-                  <th>Week</th>
-                  <th>Winners</th>
-                  <th>Losers</th>
-                  <th>Score</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentMatches.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="empty-table">
-                      No games saved yet.
-                    </td>
-                  </tr>
-                ) : (
-                  recentMatches.slice(0, 50).map((match) => (
-                    <tr
-                      key={match.id}
-                      className={editingMatchId === match.id ? 'editing' : ''}
-                    >
-                      <td>
-                        <strong>{match.week}</strong>
-                      </td>
-                      <td>
-                        {playerNameById.get(match.teamA[0]) ?? '?'} &amp;{' '}
-                        {playerNameById.get(match.teamA[1]) ?? '?'}
-                      </td>
-                      <td>
-                        {playerNameById.get(match.teamB[0]) ?? '?'} &amp;{' '}
-                        {playerNameById.get(match.teamB[1]) ?? '?'}
-                      </td>
-                      <td>
-                        <span className="score-badge">{match.scoreA}-{match.scoreB}</span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="recent-match-actions">
-                          <button
-                            type="button"
-                            className="icon-button"
-                            aria-label="Edit game"
-                            onClick={() => startEditMatch(match)}
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button danger"
-                            aria-label="Delete game"
-                            onClick={() => deleteMatch(match.id)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
+          <div className="recent-games-weeks">
+            {recentMatches.length === 0 ? (
+              <p className="empty-table">No games saved yet.</p>
+            ) : (
+              (() => {
+                const weeks = new Map<string, Match[]>()
+                recentMatches.forEach((match) => {
+                  const list = weeks.get(match.week) ?? []
+                  list.push(match)
+                  weeks.set(match.week, list)
+                })
+                return [...weeks.entries()].map(([week, matches]) => {
+                  const isOpen = expandedWeeks.has(week)
+                  return (
+                    <div className="week-subwindow" key={week}>
+                      <button
+                        type="button"
+                        className="week-subwindow-header"
+                        onClick={() =>
+                          setExpandedWeeks((current) => {
+                            const next = new Set(current)
+                            if (next.has(week)) next.delete(week)
+                            else next.add(week)
+                            return next
+                          })
+                        }
+                      >
+                        <span className="week-title">{week}</span>
+                        <span className="week-count">{matches.length} game{matches.length === 1 ? '' : 's'}</span>
+                        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      {isOpen ? (
+                        <div className="table-wrap">
+                          <table className="recent-games-table">
+                            <thead>
+                              <tr>
+                                <th>Winners</th>
+                                <th>Losers</th>
+                                <th>Score</th>
+                                <th style={{ textAlign: 'right' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {matches.map((match) => (
+                                <tr
+                                  key={match.id}
+                                  className={editingMatchId === match.id ? 'editing' : ''}
+                                >
+                                  <td>
+                                    {playerNameById.get(match.teamA[0]) ?? '?'} &amp;{' '}
+                                    {playerNameById.get(match.teamA[1]) ?? '?'}
+                                  </td>
+                                  <td>
+                                    {playerNameById.get(match.teamB[0]) ?? '?'} &amp;{' '}
+                                    {playerNameById.get(match.teamB[1]) ?? '?'}
+                                  </td>
+                                  <td>
+                                    <span className="score-badge">{match.scoreA}-{match.scoreB}</span>
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <div className="recent-match-actions">
+                                      <button
+                                        type="button"
+                                        className="icon-button"
+                                        aria-label="Edit game"
+                                        onClick={() => startEditMatch(match)}
+                                      >
+                                        <Pencil size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="icon-button danger"
+                                        aria-label="Delete game"
+                                        onClick={() => deleteMatch(match.id)}
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      ) : null}
+                    </div>
+                  )
+                })
+              })()
+            )}
           </div>
         </section>
       ) : null}
