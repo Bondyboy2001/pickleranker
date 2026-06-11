@@ -4,6 +4,9 @@ export type Player = {
   id: string
   name: string
   skillLevel: number
+  importedRating?: number
+  importedRank?: number
+  importedMovement?: string
 }
 
 export type Match = {
@@ -14,11 +17,26 @@ export type Match = {
   teamB: [string, string]
   scoreA: number
   scoreB: number
+  imported?: boolean
+}
+
+export type WeeklySnapshot = {
+  key: string
+  label: string
+  playedOn: string
+  players: {
+    playerId: string
+    name: string
+    rank: number
+    rating: number
+    movement: string
+  }[]
 }
 
 export type AppData = {
   players: Player[]
   matches: Match[]
+  weeklySnapshots?: WeeklySnapshot[]
 }
 
 export type PlayerStanding = Player & {
@@ -91,6 +109,9 @@ export type DbPlayer = {
   id: string
   name: string
   skill_level: number
+  imported_rating?: number | null
+  imported_rank?: number | null
+  imported_movement?: string | null
 }
 
 export type DbMatch = {
@@ -103,6 +124,7 @@ export type DbMatch = {
   team_b2: string
   score_a: number
   score_b: number
+  imported?: boolean
 }
 
 export type MatchFormState = {

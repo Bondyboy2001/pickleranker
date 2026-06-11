@@ -198,16 +198,20 @@ function App() {
     setNotice(message)
   }, [])
 
+  const weeklySnapshots = data.weeklySnapshots ?? []
   const { standings, summaries } = useMemo(() => buildStandings(data), [data])
-  const weekOptions = useMemo(() => buildWeekOptions(summaries), [summaries])
+  const weekOptions = useMemo(
+    () => buildWeekOptions(summaries, weeklySnapshots),
+    [summaries, weeklySnapshots],
+  )
   const activeWeek = selectedWeek || weekOptions[0]?.key || ''
   const averageRating = useMemo(() => {
     if (standings.length === 0) return 0
     return standings.reduce((total, player) => total + player.rating, 0) / standings.length
   }, [standings])
   const weeklyStandings = useMemo(
-    () => buildWeeklyStandings(activeWeek, summaries, data.players),
-    [activeWeek, summaries, data.players],
+    () => buildWeeklyStandings(activeWeek, summaries, data.players, weeklySnapshots),
+    [activeWeek, summaries, data.players, weeklySnapshots],
   )
   const rankByPlayerId = useMemo(
     () => new Map(standings.map((player, index) => [player.id, index + 1])),
@@ -230,9 +234,10 @@ function App() {
             activeWeek,
             data.matches,
             data.players,
+            weeklySnapshots,
           )
         : [],
-    [activeWeek, data.matches, data.players, selectedWeeklyPlayerId],
+    [activeWeek, data.matches, data.players, selectedWeeklyPlayerId, weeklySnapshots],
   )
   const selectedWeeklyComputedPlayer = weeklyStandings.find(
     (player) => player.playerId === selectedWeeklyPlayerId,
@@ -575,7 +580,7 @@ function App() {
                     {filteredStandings.map((player) => {
                       const isSelected = selectedPlayerId === player.id
                       const playerWeeks = isSelected
-                        ? buildPlayerWeekPoints(player.id, summaries)
+                        ? buildPlayerWeekPoints(player.id, summaries, weeklySnapshots)
                         : []
                       const rank = rankByPlayerId.get(player.id) ?? 0
                       return (
@@ -1049,7 +1054,8 @@ function WeeklyPlayerDetail({
     (total, game) => total + (game.selectedTeam === 'A' ? game.scoreB : game.scoreA),
     0,
   )
-  const totalChange = roundRating(games.reduce((total, game) => total + game.ratingChange, 0))
+  const totalChange =
+    computedPlayer?.change ?? roundRating(games.reduce((total, game) => total + game.ratingChange, 0))
 
   if (!playerName) {
     return (
