@@ -39,15 +39,22 @@ create or replace function public.is_admin()
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = ''
 stable
 as $$
   select exists (
     select 1
     from public.admin_users
-    where user_id = auth.uid()
+    where user_id = (select auth.uid())
   );
 $$;
+
+create index if not exists matches_played_on_id_idx on public.matches (played_on, id);
+create index if not exists matches_team_a1_idx on public.matches (team_a1);
+create index if not exists matches_team_a2_idx on public.matches (team_a2);
+create index if not exists matches_team_b1_idx on public.matches (team_b1);
+create index if not exists matches_team_b2_idx on public.matches (team_b2);
+create index if not exists admin_users_user_id_idx on public.admin_users (user_id);
 
 alter table public.players enable row level security;
 alter table public.matches enable row level security;
@@ -57,7 +64,7 @@ drop policy if exists "Admins can read their own admin row" on public.admin_user
 create policy "Admins can read their own admin row"
 on public.admin_users for select
 to authenticated
-using (user_id = auth.uid());
+using (user_id = (select auth.uid()));
 
 drop policy if exists "Players are public" on public.players;
 create policy "Players are public"
@@ -75,36 +82,36 @@ drop policy if exists "Admins can insert players" on public.players;
 create policy "Admins can insert players"
 on public.players for insert
 to authenticated
-with check (public.is_admin());
+with check ((select public.is_admin()));
 
 drop policy if exists "Admins can update players" on public.players;
 create policy "Admins can update players"
 on public.players for update
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using ((select public.is_admin()))
+with check ((select public.is_admin()));
 
 drop policy if exists "Admins can delete players" on public.players;
 create policy "Admins can delete players"
 on public.players for delete
 to authenticated
-using (public.is_admin());
+using ((select public.is_admin()));
 
 drop policy if exists "Admins can insert matches" on public.matches;
 create policy "Admins can insert matches"
 on public.matches for insert
 to authenticated
-with check (public.is_admin());
+with check ((select public.is_admin()));
 
 drop policy if exists "Admins can update matches" on public.matches;
 create policy "Admins can update matches"
 on public.matches for update
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using ((select public.is_admin()))
+with check ((select public.is_admin()));
 
 drop policy if exists "Admins can delete matches" on public.matches;
 create policy "Admins can delete matches"
 on public.matches for delete
 to authenticated
-using (public.is_admin());
+using ((select public.is_admin()));
