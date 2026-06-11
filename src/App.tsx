@@ -1152,12 +1152,11 @@ function App() {
       <header className="topbar">
         <div>
           <div className="brand-lockup">
-            <span className="brand-mark" aria-hidden="true">
-              <span className="brand-paddle">P</span>
-            </span>
-            <div>
-              <h1>PICKLERANKER</h1>
-            </div>
+            <img
+              className="brand-logo"
+              src="./david-lloyd-pickleball-logo.png"
+              alt="David Lloyd Clubs Pickleball"
+            />
           </div>
         </div>
         <div className="topbar-actions">

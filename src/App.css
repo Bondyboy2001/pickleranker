@@ -22,67 +22,18 @@
   border-bottom: 1px solid var(--border);
 }
 
-.topbar h1 {
-  margin: 0;
-  color: var(--text-strong);
-  font-size: 38px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: 0;
-}
-
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 14px;
 }
 
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 54px;
-  height: 54px;
-  border-radius: 13px 13px 13px 3px;
-  background: linear-gradient(145deg, #c8f36d, var(--accent-strong));
-  color: #07301d;
-  font-size: 28px;
-  font-weight: 900;
-  box-shadow: var(--shadow-soft);
-}
-
-.brand-mark::before,
-.brand-mark::after,
-.brand-paddle::before,
-.brand-paddle::after {
-  content: '';
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: #07301d;
-  opacity: 0.7;
-}
-
-.brand-mark::before {
-  top: 13px;
-  right: 13px;
-}
-
-.brand-mark::after {
-  top: 23px;
-  right: 23px;
-}
-
-.brand-paddle::before {
-  top: 30px;
-  right: 12px;
-}
-
-.brand-paddle::after {
-  top: 17px;
-  right: 29px;
+.brand-logo {
+  display: block;
+  width: clamp(180px, 22vw, 300px);
+  height: auto;
+  max-height: 78px;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .topbar p,
@@ -1366,14 +1317,9 @@ select:focus {
     padding: 20px 14px;
   }
 
-  .topbar h1 {
-    font-size: 30px;
-  }
-
-  .brand-mark {
-    width: 46px;
-    height: 46px;
-    font-size: 24px;
+  .brand-logo {
+    width: min(240px, 72vw);
+    max-height: 70px;
   }
 
   .topbar-actions {
