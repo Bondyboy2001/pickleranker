@@ -1628,11 +1628,12 @@ function RatingChart({
   const chartW = W - PX * 2
   const chartH = H - PT - PB
 
-  const totalChange = weeks.at(-1)?.cumulative ?? 0
-  const startingRating = currentRating - totalChange
-
   // Index 0 = start (before any games), 1..n = one per session
-  const ratings = [startingRating, ...weeks.map((w) => startingRating + w.cumulative)]
+  const ratings = [
+    DEFAULT_RATING,
+    ...weeks.map((week) => roundRating(DEFAULT_RATING + week.cumulative)),
+  ]
+  const currentChartRating = ratings.at(-1) ?? currentRating
   const n = ratings.length
 
   const minR = Math.min(...ratings)
@@ -1647,7 +1648,7 @@ function RatingChart({
   const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
   const floorY = py(minR - pad)
   const areaPath = `${linePath} L${pts.at(-1)!.x.toFixed(1)},${floorY.toFixed(1)} L${pts[0].x.toFixed(1)},${floorY.toFixed(1)} Z`
-  const baselineY = py(startingRating)
+  const baselineY = py(DEFAULT_RATING)
 
   // Show labels at start, every ~4 sessions, and last
   const labelSet = new Set<number>([0])
@@ -1696,8 +1697,8 @@ function RatingChart({
         })}
       </svg>
       <div className="chart-scale">
-        <span>Start {startingRating.toFixed(3)}</span>
-        <span>Now {currentRating.toFixed(3)}</span>
+        <span>Start {DEFAULT_RATING.toFixed(3)}</span>
+        <span>Now {currentChartRating.toFixed(3)}</span>
       </div>
     </div>
   )
