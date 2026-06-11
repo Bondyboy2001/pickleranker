@@ -1,6 +1,6 @@
-# PICKLERANKER
+# pickleranker
 
-PICKLERANKER is a public pickleball ranking website for David Lloyd Cardiff 4DR scores.
+pickleranker is a public pickleball ranking website for David Lloyd Cardiff 4DR scores.
 
 The app has two views:
 

@@ -1,4 +1,4 @@
-# PICKLERANKER Website Setup
+# pickleranker Website Setup
 
 This app is already built to run as a public website:
 

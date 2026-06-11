@@ -139,8 +139,8 @@ function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function getInitialRating() {
-  return DEFAULT_RATING
+function getInitialRating(player: Player) {
+  return player.importedRating ?? player.skillLevel ?? DEFAULT_RATING
 }
 
 function buildStandings(data: AppData) {
@@ -149,7 +149,7 @@ function buildStandings(data: AppData) {
   const standings = new Map<string, PlayerStanding>()
 
   data.players.forEach((player) => {
-    const initialRating = getInitialRating()
+    const initialRating = getInitialRating(player)
     ratings.set(player.id, initialRating)
     previousRatings.set(player.id, initialRating)
     standings.set(player.id, {
@@ -774,7 +774,7 @@ function App() {
           <div className="brand-lockup">
             <span className="brand-mark">PR</span>
             <div>
-              <h1>PICKLERANKER</h1>
+              <h1>pickleranker</h1>
               <p>David Lloyd Cardiff 4DR rankings with weekly score history.</p>
             </div>
           </div>
