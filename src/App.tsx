@@ -831,7 +831,7 @@ function AdminPage({
   startEditMatch: (match: Match) => void
   deleteMatch: (matchId: string) => void
 }) {
-  const [adminTab, setAdminTab] = useState<'games' | 'tournament'>('games')
+  const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
 
   const updateMatchForm = (next: Partial<MatchFormState>) => {
     setMatchForm({ ...matchForm, ...next })
@@ -909,6 +909,13 @@ function AdminPage({
             onClick={() => setAdminTab('tournament')}
           >
             Tournament
+          </button>
+          <button
+            type="button"
+            className={adminTab === 'recent' ? 'active' : ''}
+            onClick={() => setAdminTab('recent')}
+          >
+            Recent games
           </button>
         </div>
       ) : null}
@@ -1041,58 +1048,82 @@ function AdminPage({
             </form>
           </section>
 
-          <section className="panel recent-matches-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Recent games</h2>
-                <p>Edit or delete saved games.</p>
-              </div>
-            </div>
-            <div className="recent-matches-list">
-              {recentMatches.length === 0 ? (
-                <p className="empty-table">No games saved yet.</p>
-              ) : (
-                recentMatches.slice(0, 30).map((match) => (
-                  <div
-                    className={
-                      editingMatchId === match.id
-                        ? 'recent-match-row editing'
-                        : 'recent-match-row'
-                    }
-                    key={match.id}
-                  >
-                    <div>
-                      <strong>{match.week}</strong>
-                      <span>
-                        {playerNameById.get(match.teamA[0]) ?? '?'} & {playerNameById.get(match.teamA[1]) ?? '?'}{' '}
-                        beat {playerNameById.get(match.teamB[0]) ?? '?'} &{' '}
-                        {playerNameById.get(match.teamB[1]) ?? '?'} ({match.scoreA}-{match.scoreB})
-                      </span>
-                    </div>
-                    <div className="recent-match-actions">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label="Edit game"
-                        onClick={() => startEditMatch(match)}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button danger"
-                        aria-label="Delete game"
-                        onClick={() => deleteMatch(match.id)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
         </div>
+      ) : null}
+
+      {canEdit && adminTab === 'recent' ? (
+        <section className="panel recent-games-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Recent games</h2>
+              <p>Edit or delete saved games.</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table className="recent-games-table">
+              <thead>
+                <tr>
+                  <th>Week</th>
+                  <th>Winners</th>
+                  <th>Losers</th>
+                  <th>Score</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentMatches.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="empty-table">
+                      No games saved yet.
+                    </td>
+                  </tr>
+                ) : (
+                  recentMatches.slice(0, 50).map((match) => (
+                    <tr
+                      key={match.id}
+                      className={editingMatchId === match.id ? 'editing' : ''}
+                    >
+                      <td>
+                        <strong>{match.week}</strong>
+                      </td>
+                      <td>
+                        {playerNameById.get(match.teamA[0]) ?? '?'} &amp;{' '}
+                        {playerNameById.get(match.teamA[1]) ?? '?'}
+                      </td>
+                      <td>
+                        {playerNameById.get(match.teamB[0]) ?? '?'} &amp;{' '}
+                        {playerNameById.get(match.teamB[1]) ?? '?'}
+                      </td>
+                      <td>
+                        <span className="score-badge">{match.scoreA}-{match.scoreB}</span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="recent-match-actions">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label="Edit game"
+                            onClick={() => startEditMatch(match)}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button danger"
+                            aria-label="Delete game"
+                            onClick={() => deleteMatch(match.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
     </section>
   )

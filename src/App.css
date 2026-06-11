@@ -94,45 +94,75 @@
   gap: 10px;
 }
 
-.recent-matches-panel {
-  grid-column: 1 / -1;
-}
-
-.recent-matches-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.recent-match-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-alt);
-}
-
-.recent-match-row strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.recent-match-row span {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .recent-match-actions {
-  display: flex;
-  gap: 8px;
+  display: inline-flex;
+  gap: 6px;
 }
 
 .icon-button.danger {
   color: var(--danger);
+}
+
+.recent-games-panel {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.recent-games-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.recent-games-table thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.recent-games-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.recent-games-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.recent-games-table tbody tr:hover {
+  background: var(--surface-alt);
+}
+
+.recent-games-table tbody tr.editing {
+  background: var(--accent-soft);
+}
+
+.recent-games-table tbody tr.editing td {
+  border-bottom-color: var(--accent);
+}
+
+.recent-games-table tbody td strong {
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.score-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
 }
 
 .topbar p,
@@ -1486,11 +1516,6 @@ select:focus {
   .primary-button {
     grid-column: span 1;
   }
-}
-
-.recent-match-row.editing {
-  border-color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .admin-tabs {
