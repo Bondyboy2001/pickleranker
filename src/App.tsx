@@ -3,7 +3,6 @@ import type { FormEvent } from 'react'
 import {
   ArrowUpDown,
   CalendarDays,
-  CircleHelp,
   LogIn,
   LogOut,
   LineChart,
@@ -157,7 +156,7 @@ type SortDirection = 'asc' | 'desc'
 const STORAGE_KEY = 'pickleranker-cardiff-data-v3'
 const THEME_STORAGE_KEY = 'pickleranker-theme'
 const DEFAULT_RATING = 3
-const LEADERBOARD_COLUMN_COUNT = 8
+const LEADERBOARD_COLUMN_COUNT = 7
 const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 
@@ -1304,12 +1303,6 @@ function App() {
                           activeSort={sort}
                           onSort={toggleSort}
                         />
-                        <th>
-                          <span className="table-help-label">
-                            4DR +/-
-                            <CircleHelp size={14} />
-                          </span>
-                        </th>
                         <SortableHeader
                           label="Wins"
                           sortKey="wins"
@@ -1347,8 +1340,6 @@ function App() {
                             )
                           : []
                         const rank = rankByPlayerId.get(player.id) ?? 0
-                        const ratingChange = activeSnapshotRatingChanges.get(player.id) ?? 0
-
                         return (
                           <Fragment key={player.id}>
                             <tr
@@ -1386,11 +1377,6 @@ function App() {
                               </td>
                               <td className="rating-cell">
                                 {formatRating(player.rating)}
-                              </td>
-                              <td>
-                                <span className={movementClass(ratingChange)}>
-                                  {formatRatingChange(ratingChange)}
-                                </span>
                               </td>
                               <td>{player.wins}</td>
                               <td>{player.losses}</td>
