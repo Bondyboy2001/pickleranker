@@ -1076,8 +1076,12 @@ function App() {
       setMatchError('Each player can only appear once in a game.')
       return
     }
-    if (scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
-      setMatchError('Scores must be different — no draws in pickleball.')
+    if (scoreA < 0 || scoreB < 0) {
+      setMatchError('Scores cannot be negative.')
+      return
+    }
+    if (scoreA <= scoreB) {
+      setMatchError('Winner score must be higher than loser score.')
       return
     }
     setMatchError('')
@@ -1109,64 +1113,6 @@ function App() {
       week: current.week,
       playedOn: current.playedOn,
     }))
-  }
-
-  async function resetSeedData() {
-    if (!requireAdmin()) return
-    if (
-      !window.confirm(
-        'Reset everything back to the imported David Lloyd Cardiff data? Any games or players you have added will be lost.',
-      )
-    ) {
-      return
-    }
-    if (supabase) {
-      const { error: matchesError } = await supabase
-        .from('matches')
-        .delete()
-        .neq('id', '__never__')
-      if (matchesError) {
-        setNotice(matchesError.message)
-        return
-      }
-      const { error: playersError } = await supabase
-        .from('players')
-        .delete()
-        .neq('id', '__never__')
-      if (playersError) {
-        setNotice(playersError.message)
-        return
-      }
-      const { error: insertPlayersError } = await supabase
-        .from('players')
-        .insert(seededData.players.map(playerToDb))
-      if (insertPlayersError) {
-        setNotice(insertPlayersError.message)
-        return
-      }
-      const { error: insertMatchesError } = await supabase
-        .from('matches')
-        .insert(seededData.matches.map(matchToDb))
-      if (insertMatchesError) {
-        setNotice(insertMatchesError.message)
-        return
-      }
-    }
-
-    persist(seededData, 'Reset to David Lloyd Cardiff imported data.')
-  }
-
-  function exportData() {
-    const payload = JSON.stringify(data, null, 2)
-    navigator.clipboard.writeText(payload).catch(() => {})
-    const blob = new Blob([payload], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `pickleranker-${new Date().toISOString().slice(0, 10)}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-    setNotice('Backup downloaded and copied to clipboard as JSON.')
   }
 
   function toggleSort(key: SortKey) {
@@ -1216,7 +1162,6 @@ function App() {
           matchError={matchError}
           matchForm={matchForm}
           playerForm={playerForm}
-          resetSeedData={resetSeedData}
           session={session}
           setAuthForm={setAuthForm}
           setMatchError={setMatchError}
@@ -1226,7 +1171,6 @@ function App() {
           signOut={signOut}
           addMatch={addMatch}
           addPlayer={addPlayer}
-          exportData={exportData}
         />
       ) : (
         <>
@@ -1583,7 +1527,6 @@ function AdminPage({
   matchError,
   matchForm,
   playerForm,
-  resetSeedData,
   session,
   setAuthForm,
   setMatchError,
@@ -1593,7 +1536,6 @@ function AdminPage({
   signOut,
   addMatch,
   addPlayer,
-  exportData,
 }: {
   authForm: { email: string; password: string }
   authError: string
@@ -1603,7 +1545,6 @@ function AdminPage({
   matchError: string
   matchForm: typeof emptyMatch
   playerForm: { name: string; skillLevel: string }
-  resetSeedData: () => void
   session: Session | null
   setAuthForm: (value: { email: string; password: string }) => void
   setMatchError: (value: string) => void
@@ -1613,8 +1554,12 @@ function AdminPage({
   signOut: () => void
   addMatch: (event: FormEvent<HTMLFormElement>) => void
   addPlayer: (event: FormEvent<HTMLFormElement>) => void
-  exportData: () => void
 }) {
+  const updateMatchForm = (next: Partial<typeof emptyMatch>) => {
+    setMatchForm({ ...matchForm, ...next })
+    setMatchError('')
+  }
+
   return (
     <section className="admin-page">
       <section className="panel login-panel">
@@ -1673,97 +1618,119 @@ function AdminPage({
 
       {canEdit ? (
       <div className="admin-grid">
-        <section className="panel">
-          <div className="panel-heading">
+        <section className="panel match-entry-panel">
+          <div className="panel-heading match-entry-heading">
             <div>
               <h2>Add weekly game</h2>
-              <p>Four different players, doubles format.</p>
+              <p>Enter winners first, then losers and the final score.</p>
             </div>
           </div>
-          <form className="form-grid" onSubmit={addMatch}>
-            <label>
-              Week
-              <input
-                value={matchForm.week}
-                onChange={(event) =>
-                  setMatchForm({ ...matchForm, week: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Date
-              <input
-                type="date"
-                value={matchForm.playedOn}
-                onChange={(event) =>
-                  setMatchForm({ ...matchForm, playedOn: event.target.value })
-                }
-              />
-            </label>
-            <fieldset>
-              <legend>Team A</legend>
-              <PlayerSelect
-                players={data.players}
-                value={matchForm.teamA1}
-                excludeIds={[matchForm.teamA2, matchForm.teamB1, matchForm.teamB2]}
-                onChange={(value) => {
-                  setMatchForm({ ...matchForm, teamA1: value })
-                  setMatchError('')
-                }}
-              />
-              <PlayerSelect
-                players={data.players}
-                value={matchForm.teamA2}
-                excludeIds={[matchForm.teamA1, matchForm.teamB1, matchForm.teamB2]}
-                onChange={(value) => {
-                  setMatchForm({ ...matchForm, teamA2: value })
-                  setMatchError('')
-                }}
-              />
-            </fieldset>
-            <fieldset>
-              <legend>Team B</legend>
-              <PlayerSelect
-                players={data.players}
-                value={matchForm.teamB1}
-                excludeIds={[matchForm.teamA1, matchForm.teamA2, matchForm.teamB2]}
-                onChange={(value) => {
-                  setMatchForm({ ...matchForm, teamB1: value })
-                  setMatchError('')
-                }}
-              />
-              <PlayerSelect
-                players={data.players}
-                value={matchForm.teamB2}
-                excludeIds={[matchForm.teamA1, matchForm.teamA2, matchForm.teamB1]}
-                onChange={(value) => {
-                  setMatchForm({ ...matchForm, teamB2: value })
-                  setMatchError('')
-                }}
-              />
-            </fieldset>
-            <label>
-              Team A score
-              <input
-                type="number"
-                min="0"
-                value={matchForm.scoreA}
-                onChange={(event) =>
-                  setMatchForm({ ...matchForm, scoreA: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Team B score
-              <input
-                type="number"
-                min="0"
-                value={matchForm.scoreB}
-                onChange={(event) =>
-                  setMatchForm({ ...matchForm, scoreB: event.target.value })
-                }
-              />
-            </label>
+          <form className="game-entry-form" onSubmit={addMatch}>
+            <div className="game-entry-row">
+              <label>
+                Week
+                <input
+                  value={matchForm.week}
+                  onChange={(event) => updateMatchForm({ week: event.target.value })}
+                />
+              </label>
+              <label>
+                Date
+                <input
+                  type="date"
+                  value={matchForm.playedOn}
+                  onChange={(event) =>
+                    updateMatchForm({ playedOn: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="team-entry-grid">
+              <fieldset className="team-card winner-card">
+                <legend>Winners</legend>
+                <PlayerSelect
+                  players={data.players}
+                  value={matchForm.teamA1}
+                  excludeIds={[matchForm.teamA2, matchForm.teamB1, matchForm.teamB2]}
+                  onChange={(value) => updateMatchForm({ teamA1: value })}
+                />
+                <PlayerSelect
+                  players={data.players}
+                  value={matchForm.teamA2}
+                  excludeIds={[matchForm.teamA1, matchForm.teamB1, matchForm.teamB2]}
+                  onChange={(value) => updateMatchForm({ teamA2: value })}
+                />
+              </fieldset>
+              <fieldset className="team-card loser-card">
+                <legend>Losers</legend>
+                <PlayerSelect
+                  players={data.players}
+                  value={matchForm.teamB1}
+                  excludeIds={[matchForm.teamA1, matchForm.teamA2, matchForm.teamB2]}
+                  onChange={(value) => updateMatchForm({ teamB1: value })}
+                />
+                <PlayerSelect
+                  players={data.players}
+                  value={matchForm.teamB2}
+                  excludeIds={[matchForm.teamA1, matchForm.teamA2, matchForm.teamB1]}
+                  onChange={(value) => updateMatchForm({ teamB2: value })}
+                />
+              </fieldset>
+            </div>
+
+            <section className="score-entry" aria-label="Game score">
+              <div className="score-inputs">
+                <label>
+                  Winners score
+                  <input
+                    type="number"
+                    min="1"
+                    value={matchForm.scoreA}
+                    onChange={(event) =>
+                      updateMatchForm({ scoreA: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Losers score
+                  <input
+                    type="number"
+                    min="0"
+                    value={matchForm.scoreB}
+                    onChange={(event) =>
+                      updateMatchForm({ scoreB: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="score-presets" aria-label="Quick scores">
+                {[
+                  ['11', '0'],
+                  ['11', '5'],
+                  ['11', '7'],
+                  ['11', '9'],
+                  ['12', '10'],
+                ].map(([winnerScore, loserScore]) => (
+                  <button
+                    type="button"
+                    className={
+                      matchForm.scoreA === winnerScore &&
+                      matchForm.scoreB === loserScore
+                        ? 'active'
+                        : ''
+                    }
+                    key={`${winnerScore}-${loserScore}`}
+                    onClick={() =>
+                      updateMatchForm({ scoreA: winnerScore, scoreB: loserScore })
+                    }
+                  >
+                    {winnerScore}-{loserScore}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {matchError ? <p className="form-error">{matchError}</p> : null}
             <button type="submit" className="primary-button" disabled={!canEdit}>
               <Save size={17} />
@@ -1808,28 +1775,6 @@ function AdminPage({
               <Plus size={18} />
             </button>
           </form>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Maintenance</h2>
-              <p>Backup or reset the Cardiff seed data.</p>
-            </div>
-          </div>
-          <div className="admin-actions">
-            <button type="button" className="ghost-button" onClick={exportData}>
-              Export backup
-            </button>
-            <button
-              type="button"
-              className="ghost-button danger"
-              onClick={resetSeedData}
-              disabled={!canEdit}
-            >
-              Reset Cardiff data
-            </button>
-          </div>
         </section>
       </div>
       ) : null}
