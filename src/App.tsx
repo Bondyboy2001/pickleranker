@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, Ref } from 'react'
 import {
   CalendarDays,
   ChevronDown,
@@ -133,6 +133,7 @@ function App() {
   const [selectedWeek, setSelectedWeek] = useState('')
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
   const [savingAction, setSavingAction] = useState<string | null>(null)
+  const weeklyDetailRef = useRef<HTMLElement | null>(null)
 
   const canEdit = !isSupabaseConfigured || isAdmin
 
@@ -605,6 +606,18 @@ function App() {
     }))
   }
 
+  function selectWeeklyPlayer(playerId: string) {
+    setSelectedWeeklyPlayerId(playerId)
+    if (!window.matchMedia('(max-width: 680px)').matches) return
+
+    window.requestAnimationFrame(() => {
+      weeklyDetailRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  }
+
   function selectPublicTab(tab: PublicTab) {
     setActivePublicTab(tab)
     if (tab === 'overall') {
@@ -910,6 +923,7 @@ function App() {
               </section>
 
               <WeeklyPlayerDetail
+                detailRef={weeklyDetailRef}
                 games={weeklyPlayerGames}
                 playerName={selectedWeeklyPlayerName}
                 computedPlayer={selectedWeeklyComputedPlayer}
@@ -963,11 +977,11 @@ function App() {
                               effectiveWeeklyPlayerId === player.playerId ? 'selected-row' : ''
                             }
                             tabIndex={0}
-                            onClick={() => setSelectedWeeklyPlayerId(player.playerId)}
+                            onClick={() => selectWeeklyPlayer(player.playerId)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault()
-                                setSelectedWeeklyPlayerId(player.playerId)
+                                selectWeeklyPlayer(player.playerId)
                               }
                             }}
                           >
@@ -1468,10 +1482,12 @@ function AdminPage({
 }
 
 function WeeklyPlayerDetail({
+  detailRef,
   games,
   playerName,
   computedPlayer,
 }: {
+  detailRef: Ref<HTMLElement>
   games: WeeklyPlayerGame[]
   playerName: string
   computedPlayer?: WeeklyStanding
@@ -1491,7 +1507,7 @@ function WeeklyPlayerDetail({
 
   if (!playerName) {
     return (
-      <aside className="panel weekly-detail-panel empty-weekly-detail">
+      <aside ref={detailRef} className="panel weekly-detail-panel empty-weekly-detail">
         <h2>Weekly player overview</h2>
         <p>Select a player in the weekly leaderboard to see their games.</p>
       </aside>
@@ -1499,7 +1515,7 @@ function WeeklyPlayerDetail({
   }
 
   return (
-    <aside className="panel weekly-detail-panel">
+    <aside ref={detailRef} className="panel weekly-detail-panel">
       <div className="weekly-detail-head">
         <div>
           <span className="eyebrow">Weekly player overview</span>
