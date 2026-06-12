@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   CalendarDays,
@@ -23,7 +23,6 @@ import { AdminField, FieldInput } from './components/AdminField'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { NoticeBanner } from './components/NoticeBanner'
 import { PlayerAutocomplete } from './components/PlayerAutocomplete'
-import { RatingChart } from './components/RatingChart'
 import { PlayersPanel } from './components/PlayersPanel'
 import { RatingExplainer } from './components/RatingExplainer'
 import { TournamentPanel } from './components/TournamentPanel'
@@ -43,9 +42,7 @@ import {
   saveLocalData,
 } from './lib/data'
 import {
-  buildPlayerRatingWeeks,
   buildStandings,
-  DEFAULT_RATING,
   buildWeekOptions,
   buildWeeklyPlayerGames,
   buildWeeklyStandings,
@@ -60,7 +57,6 @@ import type {
   MatchFormState,
   Player,
   PlayerStanding,
-  PlayerWeekPoint,
   SortDirection,
   SortKey,
   WeeklyPlayerGame,
@@ -75,7 +71,10 @@ const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 const PUBLIC_REFRESH_MS = 60_000
 
-type ConfirmAction = { type: 'match'; id: string }
+type ConfirmAction =
+  | { type: 'delete-match'; id: string }
+  | { type: 'save-edited-match'; match: Match; previousMatchId: string }
+type PublicTab = 'overall' | 'weekly' | 'players' | 'how-4dr'
 
 const emptyMatch: MatchFormState = {
   playedOn: new Date().toISOString().slice(0, 10),
@@ -115,10 +114,7 @@ function App() {
     isSupabaseConfigured ? 'loading' : 'idle',
   )
   const [loadError, setLoadError] = useState('')
-  const [activePublicTab, setActivePublicTab] = useState<
-    'overall' | 'weekly' | 'players' | 'how-4dr'
-  >('overall')
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  const [activePublicTab, setActivePublicTab] = useState<PublicTab>('overall')
   const [selectedWeeklyPlayerId, setSelectedWeeklyPlayerId] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'rank',
@@ -258,8 +254,8 @@ function App() {
     return standings.reduce((total, player) => total + player.rating, 0) / standings.length
   }, [standings])
   const weeklyStandings = useMemo(
-    () => buildWeeklyStandings(activeWeek, summaries, data.players, weeklySnapshots),
-    [activeWeek, summaries, data.players, weeklySnapshots],
+    () => buildWeeklyStandings(activeWeek, summaries, data.players, data.matches, weeklySnapshots),
+    [activeWeek, summaries, data.players, data.matches, weeklySnapshots],
   )
   const rankByPlayerId = useMemo(
     () => new Map(standings.map((player, index) => [player.id, index + 1])),
@@ -278,31 +274,51 @@ function App() {
     () => sortWeeklyStandings(weeklyStandings, weeklySort.key, weeklySort.direction),
     [weeklyStandings, weeklySort],
   )
+  const weeklyRankByPlayerId = useMemo(
+    () =>
+      new Map(
+        [...weeklyStandings]
+          .sort(
+            (a, b) =>
+              b.rating - a.rating ||
+              b.change - a.change ||
+              b.wins - a.wins ||
+              a.name.localeCompare(b.name),
+          )
+          .map((player, index) => [player.playerId, index + 1]),
+      ),
+    [weeklyStandings],
+  )
   const filteredWeeklyStandings = useMemo(() => {
     const query = weeklySearch.trim().toLowerCase()
     if (!query) return sortedWeeklyStandings
     return sortedWeeklyStandings.filter((player) => player.name.toLowerCase().includes(query))
   }, [weeklySearch, sortedWeeklyStandings])
+  const effectiveWeeklyPlayerId = selectedWeeklyPlayerId ?? weeklyStandings[0]?.playerId ?? null
+  const selectedWeeklyComputedPlayer = useMemo(
+    () => weeklyStandings.find((player) => player.playerId === effectiveWeeklyPlayerId),
+    [effectiveWeeklyPlayerId, weeklyStandings],
+  )
+  const selectedWeeklyPlayerName = useMemo(
+    () =>
+      selectedWeeklyComputedPlayer?.name ??
+      standings.find((player) => player.id === effectiveWeeklyPlayerId)?.name ??
+      '',
+    [effectiveWeeklyPlayerId, selectedWeeklyComputedPlayer?.name, standings],
+  )
   const weeklyPlayerGames = useMemo(
     () =>
-      selectedWeeklyPlayerId
+      effectiveWeeklyPlayerId
         ? buildWeeklyPlayerGames(
-            selectedWeeklyPlayerId,
+            effectiveWeeklyPlayerId,
             activeWeek,
             data.matches,
             data.players,
             weeklySnapshots,
           )
         : [],
-    [activeWeek, data.matches, data.players, selectedWeeklyPlayerId, weeklySnapshots],
+    [activeWeek, data.matches, data.players, effectiveWeeklyPlayerId, weeklySnapshots],
   )
-  const selectedWeeklyComputedPlayer = weeklyStandings.find(
-    (player) => player.playerId === selectedWeeklyPlayerId,
-  )
-  const selectedWeeklyPlayerName =
-    selectedWeeklyComputedPlayer?.name ??
-    standings.find((player) => player.id === selectedWeeklyPlayerId)?.name ??
-    ''
   const recentMatches = useMemo(
     () => [...data.matches].sort((a, b) => b.playedOn.localeCompare(a.playedOn) || b.id.localeCompare(a.id)),
     [data.matches],
@@ -447,14 +463,40 @@ function App() {
     }
   }
 
+  async function persistMatch(match: Match, previousMatchId: string | null) {
+    setSavingAction('match')
+    try {
+      if (supabase) {
+        const { error } = previousMatchId
+          ? await supabase.from('matches').update(matchToDb(match)).eq('id', previousMatchId)
+          : await supabase.from('matches').insert(matchToDb(match))
+        if (error) {
+          setMatchError(error.message)
+          return
+        }
+      }
+
+      const nextMatches = previousMatchId
+        ? data.matches.map((existing) => (existing.id === previousMatchId ? match : existing))
+        : [...data.matches, match]
+
+      applyData(
+        { ...data, matches: nextMatches },
+        previousMatchId ? `${match.week} updated.` : `${match.week} score saved.`,
+      )
+      setEditingMatchId(null)
+      setMatchForm((current) => ({ ...emptyMatch, playedOn: current.playedOn }))
+    } finally {
+      setSavingAction(null)
+    }
+  }
+
   async function saveMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!requireAdmin()) return
     const validated = validateMatchForm()
     if (!validated) return
 
-    setSavingAction('match')
-    try {
     const match: Match = {
       id: editingMatchId ?? makeId('m'),
       week: formatResultsLabel(matchForm.playedOn),
@@ -465,37 +507,17 @@ function App() {
       scoreB: validated.scoreB,
     }
 
-    if (supabase) {
-      const { error } = editingMatchId
-        ? await supabase.from('matches').update(matchToDb(match)).eq('id', editingMatchId)
-        : await supabase.from('matches').insert(matchToDb(match))
-      if (error) {
-        setMatchError(error.message)
-        return
-      }
+    if (editingMatchId) {
+      setConfirmAction({ type: 'save-edited-match', match, previousMatchId: editingMatchId })
+      return
     }
 
-    const nextMatches = editingMatchId
-      ? data.matches.map((existing) => (existing.id === editingMatchId ? match : existing))
-      : [...data.matches, match]
-
-    applyData(
-      { ...data, matches: nextMatches },
-      editingMatchId ? `${match.week} updated.` : `${match.week} score saved.`,
-    )
-    setEditingMatchId(null)
-    setMatchForm((current) => ({ ...emptyMatch, playedOn: current.playedOn }))
-    } finally {
-      setSavingAction(null)
-    }
+    await persistMatch(match, null)
   }
 
   function startEditMatch(match: Match) {
     setEditingMatchId(match.id)
     setMatchError('')
-    document
-      .querySelector('.match-entry-panel')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setMatchForm({
       playedOn: match.playedOn,
       teamA1: match.teamA[0],
@@ -515,7 +537,7 @@ function App() {
 
   function requestDeleteMatch(matchId: string) {
     if (!requireAdmin()) return
-    setConfirmAction({ type: 'match', id: matchId })
+    setConfirmAction({ type: 'delete-match', id: matchId })
   }
 
   async function deleteMatch(matchId: string) {
@@ -545,7 +567,10 @@ function App() {
     if (!confirmAction) return
     const action = confirmAction
     setConfirmAction(null)
-    if (action.type === 'match') await deleteMatch(action.id)
+    if (action.type === 'delete-match') await deleteMatch(action.id)
+    if (action.type === 'save-edited-match') {
+      await persistMatch(action.match, action.previousMatchId)
+    }
   }
 
   async function saveTournamentRound(newMatches: Match[]) {
@@ -580,12 +605,30 @@ function App() {
     }))
   }
 
+  function selectPublicTab(tab: PublicTab) {
+    setActivePublicTab(tab)
+    if (tab === 'overall') {
+      setSort({ key: 'rank', direction: 'asc' })
+    }
+    if (tab === 'weekly') {
+      setWeeklySort({ key: 'rank', direction: 'asc' })
+    }
+  }
+
   const confirmDialog = confirmAction
-    ? {
-        title: 'Delete this game?',
-        message: 'Ratings will be recalculated for everyone who played in it.',
-        confirmLabel: 'Delete game',
-      }
+    ? confirmAction.type === 'delete-match'
+      ? {
+          title: 'Delete this game?',
+          message: 'Ratings will be recalculated for everyone who played in it.',
+          confirmLabel: 'Delete game',
+          danger: true,
+        }
+      : {
+          title: 'Save edited game?',
+          message: 'This will update the saved result and recalculate affected ratings.',
+          confirmLabel: 'Save changes',
+          danger: false,
+        }
     : null
 
   return (
@@ -596,7 +639,7 @@ function App() {
         title={confirmDialog?.title ?? ''}
         message={confirmDialog?.message ?? ''}
         confirmLabel={confirmDialog?.confirmLabel}
-        danger
+        danger={confirmDialog?.danger}
         onConfirm={() => void handleConfirmAction()}
         onCancel={() => setConfirmAction(null)}
       />
@@ -621,28 +664,28 @@ function App() {
               <button
                 type="button"
                 className={activePublicTab === 'overall' ? 'active' : ''}
-                onClick={() => setActivePublicTab('overall')}
+                onClick={() => selectPublicTab('overall')}
               >
                 Overall
               </button>
               <button
                 type="button"
                 className={activePublicTab === 'weekly' ? 'active' : ''}
-                onClick={() => setActivePublicTab('weekly')}
+                onClick={() => selectPublicTab('weekly')}
               >
                 Weekly
               </button>
               <button
                 type="button"
                 className={activePublicTab === 'players' ? 'active' : ''}
-                onClick={() => setActivePublicTab('players')}
+                onClick={() => selectPublicTab('players')}
               >
                 Players
               </button>
               <button
                 type="button"
                 className={activePublicTab === 'how-4dr' ? 'active' : ''}
-                onClick={() => setActivePublicTab('how-4dr')}
+                onClick={() => selectPublicTab('how-4dr')}
               >
                 How 4DR works
               </button>
@@ -784,66 +827,33 @@ function App() {
                   </thead>
                   <tbody>
                     {filteredStandings.map((player) => {
-                      const isSelected = selectedPlayerId === player.id
-                      const playerWeeks = isSelected
-                        ? buildPlayerRatingWeeks(player.id, data, 'fromDefault')
-                        : []
                       const rank = rankByPlayerId.get(player.id) ?? 0
                       return (
-                        <Fragment key={player.id}>
-                          <tr
-                            className={isSelected ? 'selected-row' : ''}
-                            tabIndex={0}
-                            onClick={() =>
-                              setSelectedPlayerId((current) =>
-                                current === player.id ? null : player.id,
-                              )
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                setSelectedPlayerId((current) =>
-                                  current === player.id ? null : player.id,
-                                )
-                              }
-                            }}
+                        <tr key={player.id}>
+                          <td
+                            data-rank={rank}
+                            className={`rank-cell rank-pos-${rank <= 3 ? rank : 'other'}`}
                           >
-                            <td
-                              data-rank={rank}
-                              className={`rank-cell rank-pos-${rank <= 3 ? rank : 'other'}`}
-                            >
-                              {rank}
-                            </td>
-                            <td>
-                              <div className="player-cell">
-                                <span className="player-avatar" aria-hidden="true">
-                                  {player.name.slice(0, 1)}
-                                </span>
-                                <strong>{player.name}</strong>
-                              </div>
-                            </td>
-                            <td className="rating-cell">{formatRating(player.rating)}</td>
-                            <td>{player.wins}</td>
-                            <td>{player.losses}</td>
-                            <td>{player.games}</td>
-                            <td>
-                              {player.pointsFor - player.pointsAgainst >= 0 ? '+' : ''}
-                              {player.pointsFor - player.pointsAgainst}
-                            </td>
-                            <td>{formatWinRate(player.wins, player.games)}</td>
-                          </tr>
-                          {isSelected ? (
-                            <tr className="expanded-row">
-                              <td colSpan={LEADERBOARD_COLUMN_COUNT}>
-                                <PlayerDetailPanel
-                                  player={player}
-                                  weeks={playerWeeks}
-                                  startRating={DEFAULT_RATING}
-                                />
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
+                            {rank}
+                          </td>
+                          <td>
+                            <div className="player-cell">
+                              <span className="player-avatar" aria-hidden="true">
+                                {player.name.slice(0, 1)}
+                              </span>
+                              <strong>{player.name}</strong>
+                            </div>
+                          </td>
+                          <td className="rating-cell">{formatRating(player.rating)}</td>
+                          <td>{player.wins}</td>
+                          <td>{player.losses}</td>
+                          <td>{player.games}</td>
+                          <td>
+                            {player.pointsFor - player.pointsAgainst >= 0 ? '+' : ''}
+                            {player.pointsFor - player.pointsAgainst}
+                          </td>
+                          <td>{formatWinRate(player.wins, player.games)}</td>
+                        </tr>
                       )
                     })}
                     {filteredStandings.length === 0 ? (
@@ -862,7 +872,7 @@ function App() {
           )}
           {activePublicTab === 'weekly' && (
             <div className="weekly-workspace">
-              <section className="panel weekly-panel">
+              <section className="panel weekly-panel weekly-controls-panel">
                 <div className="panel-heading weekly-heading">
                   <label className="search-control weekly-search">
                     <Search size={18} />
@@ -872,13 +882,20 @@ function App() {
                       value={weeklySearch}
                       onChange={(event) => setWeeklySearch(event.target.value)}
                       aria-label="Search weekly players"
+                      list="weekly-player-search-options"
                     />
+                    <datalist id="weekly-player-search-options">
+                      {weeklyStandings.map((player) => (
+                        <option key={player.playerId} value={player.name} />
+                      ))}
+                    </datalist>
                   </label>
                   <select
                     className="week-select"
                     value={activeWeek}
                     onChange={(event) => {
                       setSelectedWeek(event.target.value)
+                      setWeeklySort({ key: 'rank', direction: 'asc' })
                       setSelectedWeeklyPlayerId(null)
                     }}
                     aria-label="Select week"
@@ -890,6 +907,15 @@ function App() {
                     ))}
                   </select>
                 </div>
+              </section>
+
+              <WeeklyPlayerDetail
+                games={weeklyPlayerGames}
+                playerName={selectedWeeklyPlayerName}
+                computedPlayer={selectedWeeklyComputedPlayer}
+              />
+
+              <section className="panel weekly-panel weekly-table-panel">
                 <div className="table-wrap">
                   <table className="weekly-table">
                     <thead>
@@ -903,6 +929,12 @@ function App() {
                         <SortableHeader
                           label="Player"
                           sortKey="player"
+                          activeSort={weeklySort}
+                          onSort={toggleWeeklySort}
+                        />
+                        <SortableHeader
+                          label="4DR"
+                          sortKey="rating"
                           activeSort={weeklySort}
                           onSort={toggleWeeklySort}
                         />
@@ -928,7 +960,7 @@ function App() {
                           <tr
                             key={player.playerId}
                             className={
-                              selectedWeeklyPlayerId === player.playerId ? 'selected-row' : ''
+                              effectiveWeeklyPlayerId === player.playerId ? 'selected-row' : ''
                             }
                             tabIndex={0}
                             onClick={() => setSelectedWeeklyPlayerId(player.playerId)}
@@ -939,7 +971,9 @@ function App() {
                               }
                             }}
                           >
-                            <td className="rank-cell">{index + 1}</td>
+                            <td className="rank-cell">
+                              {weeklyRankByPlayerId.get(player.playerId) ?? index + 1}
+                            </td>
                             <td>
                               <strong>{player.name}</strong>
                               <span>
@@ -948,6 +982,7 @@ function App() {
                                 {pointDifference}
                               </span>
                             </td>
+                            <td className="rating-cell">{formatRating(player.rating)}</td>
                             <td>
                               <span className={movementClass(player.change)}>
                                 {player.change >= 0 ? '+' : ''}
@@ -965,7 +1000,7 @@ function App() {
                       })}
                       {filteredWeeklyStandings.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="empty-table">
+                          <td colSpan={5} className="empty-table">
                             {weekOptions.length === 0
                               ? 'No games recorded yet.'
                               : weeklySearch.trim()
@@ -978,12 +1013,6 @@ function App() {
                   </table>
                 </div>
               </section>
-
-              <WeeklyPlayerDetail
-                games={weeklyPlayerGames}
-                playerName={selectedWeeklyPlayerName}
-                computedPlayer={selectedWeeklyComputedPlayer}
-              />
             </div>
           )}
           {activePublicTab === 'players' && (
@@ -1065,6 +1094,18 @@ function AdminPage({
   const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
   const importInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (adminTab !== 'games' || !editingMatchId) return
+    document
+      .querySelector('.match-entry-panel')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [adminTab, editingMatchId])
+
+  function editRecentMatch(match: Match) {
+    startEditMatch(match)
+    setAdminTab('games')
+  }
 
   const updateMatchForm = (next: Partial<MatchFormState>) => {
     setMatchForm({ ...matchForm, ...next })
@@ -1194,7 +1235,6 @@ function AdminPage({
             <div className="panel-heading">
               <div>
                 <h2>{editingMatchId ? 'Edit game' : 'Add weekly game'}</h2>
-                <p>Pick both pairs and enter each side&apos;s score. The higher score wins.</p>
               </div>
             </div>
             <form className="game-entry-form" onSubmit={saveMatch}>
@@ -1286,18 +1326,17 @@ function AdminPage({
             <div className="panel-heading">
               <div>
                 <h2>Add player</h2>
-                <p>New players start from their skill level.</p>
               </div>
             </div>
             <form className="add-player-form" onSubmit={addPlayer}>
-              <AdminField label="Player name">
+              <AdminField label="Player name" hideLabel>
                 <FieldInput
                   placeholder="Player name"
                   value={playerForm.name}
                   onChange={(event) => setPlayerForm({ ...playerForm, name: event.target.value })}
                 />
               </AdminField>
-              <AdminField label="Starting rating">
+              <AdminField label="Starting rating" hideLabel>
                 <FieldInput
                   type="number"
                   placeholder="3.0"
@@ -1329,7 +1368,6 @@ function AdminPage({
           <div className="panel-heading">
             <div>
               <h2>Recent games</h2>
-              <p>Edit or delete saved games grouped by week.</p>
             </div>
           </div>
           <div className="recent-games-weeks">
@@ -1397,7 +1435,7 @@ function AdminPage({
                                         type="button"
                                         className="icon-button"
                                         aria-label="Edit game"
-                                        onClick={() => startEditMatch(match)}
+                                        onClick={() => editRecentMatch(match)}
                                       >
                                         <Pencil size={16} />
                                       </button>
@@ -1713,73 +1751,6 @@ function SortableHeader<T extends string>({
         <span>{isActive ? (activeSort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
       </button>
     </th>
-  )
-}
-
-function PlayerDetailPanel({
-  player,
-  weeks,
-  startRating,
-}: {
-  player: PlayerStanding
-  weeks: PlayerWeekPoint[]
-  startRating: number
-}) {
-  const latestWeek = weeks.at(-1)
-  const replayRating = latestWeek
-    ? roundRating(startRating + latestWeek.cumulative)
-    : startRating
-  const totalChange = latestWeek?.cumulative ?? 0
-  const bestWeek = weeks.reduce<PlayerWeekPoint | null>(
-    (best, week) => (!best || week.change > best.change ? week : best),
-    null,
-  )
-  const latestRows = [...weeks].reverse().slice(0, 5)
-
-  return (
-    <section className="panel player-panel">
-      <RatingChart
-        weeks={weeks}
-        currentRating={replayRating}
-        startRating={startRating}
-      />
-
-      <div className="player-metrics">
-        <div>
-          <span>Total change</span>
-          <strong>
-            {totalChange >= 0 ? '+' : ''}
-            {totalChange.toFixed(3)}
-          </strong>
-        </div>
-        <div>
-          <span>Best week</span>
-          <strong>
-            {bestWeek && bestWeek.change >= 0 ? '+' : ''}
-            {bestWeek ? bestWeek.change.toFixed(3) : '0.000'}
-          </strong>
-        </div>
-        <div>
-          <span>Point +/-</span>
-          <strong>{player.pointsFor - player.pointsAgainst}</strong>
-        </div>
-      </div>
-
-      <div className="week-list" aria-label={`${player.name} weekly changes`}>
-        {latestRows.map((week) => (
-          <div key={week.key}>
-            <span>{week.label}</span>
-            <small>
-              {week.wins}-{week.losses} | {week.pointsFor}-{week.pointsAgainst}
-            </small>
-            <strong className={week.change >= 0 ? 'positive' : 'negative'}>
-              {week.change >= 0 ? '+' : ''}
-              {week.change.toFixed(3)}
-            </strong>
-          </div>
-        ))}
-      </div>
-    </section>
   )
 }
 

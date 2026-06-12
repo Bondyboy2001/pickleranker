@@ -5,7 +5,7 @@ import { formatRating, roundRating } from '../lib/scoring'
 import type { PlayerWeekPoint } from '../lib/types'
 
 const CHART_WIDTH = 720
-const CHART_HEIGHT = 300
+const CHART_HEIGHT = 460
 const PADDING_X = 44
 const PADDING_TOP = 24
 const PADDING_BOTTOM = 40
@@ -37,15 +37,13 @@ function buildYTicks(minRating: number, maxRating: number) {
 }
 
 function getSvgXFromClient(svg: SVGSVGElement, clientX: number) {
-  const inverse = svg.getScreenCTM()?.inverse()
-  if (!inverse) return 0
-  return new DOMPoint(clientX, 0).matrixTransform(inverse).x
+  const rect = svg.getBoundingClientRect()
+  if (rect.width === 0) return 0
+  return ((clientX - rect.left) / rect.width) * CHART_WIDTH
 }
 
-function getClientXFromSvg(svg: SVGSVGElement, svgX: number) {
-  const matrix = svg.getScreenCTM()
-  if (!matrix) return 0
-  return new DOMPoint(svgX, 0).matrixTransform(matrix).x
+function clampChartX(value: number) {
+  return Math.min(CHART_WIDTH - PADDING_X, Math.max(PADDING_X, value))
 }
 
 type ChartPoint = {
@@ -56,31 +54,34 @@ type ChartPoint = {
   week: PlayerWeekPoint | null
 }
 
+type HoverState = {
+  index: number
+  x: number
+}
+
 export function RatingChart({
   weeks,
-  currentRating,
   startRating = DEFAULT_RATING,
 }: {
   weeks: PlayerWeekPoint[]
-  currentRating: number
   startRating?: number
 }) {
   const gradientId = useId()
-  const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const hoverLineRef = useRef<SVGLineElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number | null>(null)
   const pendingClientXRef = useRef<number | null>(null)
-  const hoveredIndexRef = useRef<number | null>(null)
+  const hoverStateRef = useRef<HoverState | null>(null)
 
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  const [tooltipLeft, setTooltipLeft] = useState(0)
+  const [hoverState, setHoverState] = useState<HoverState | null>(null)
+  const [isHovering, setIsHovering] = useState(false)
 
   const chart = useMemo(() => {
     const ratings = [
       startRating,
       ...weeks.map((week) => roundRating(startRating + week.cumulative)),
     ]
-    const currentChartRating = ratings.at(-1) ?? currentRating
     const pointCount = ratings.length
     const chartWidth = CHART_WIDTH - PADDING_X * 2
     const chartHeight = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM
@@ -126,12 +127,9 @@ export function RatingChart({
       baselineY,
       yTicks,
       labelIndexes,
-      currentChartRating,
       yAt,
-      plotWidth: chartWidth,
-      plotHeight: chartHeight,
     }
-  }, [weeks, currentRating, startRating])
+  }, [weeks, startRating])
 
   useEffect(() => {
     return () => {
@@ -141,10 +139,15 @@ export function RatingChart({
 
   function syncHover(clientX: number) {
     const svg = svgRef.current
-    const wrap = wrapRef.current
-    if (!svg || !wrap) return
+    if (!svg) return
 
-    const svgX = getSvgXFromClient(svg, clientX)
+    const svgX = clampChartX(getSvgXFromClient(svg, clientX))
+    hoverLineRef.current?.setAttribute('x1', svgX.toFixed(1))
+    hoverLineRef.current?.setAttribute('x2', svgX.toFixed(1))
+    if (tooltipRef.current) {
+      tooltipRef.current.style.left = `${(svgX / CHART_WIDTH) * 100}%`
+    }
+
     let nearest = 0
     let nearestDistance = Number.POSITIVE_INFINITY
     chart.points.forEach((point) => {
@@ -155,15 +158,12 @@ export function RatingChart({
       }
     })
 
-    const point = chart.points[nearest]
-    const wrapRect = wrap.getBoundingClientRect()
-    const nextTooltipLeft = getClientXFromSvg(svg, point.x) - wrapRect.left
-
-    if (hoveredIndexRef.current !== nearest) {
-      hoveredIndexRef.current = nearest
-      setHoveredIndex(nearest)
+    const current = hoverStateRef.current
+    if (!current || current.index !== nearest || Math.abs(current.x - svgX) > 0.5) {
+      const nextState = { index: nearest, x: svgX }
+      hoverStateRef.current = nextState
+      setHoverState(nextState)
     }
-    setTooltipLeft(nextTooltipLeft)
   }
 
   function scheduleHover(clientX: number) {
@@ -176,35 +176,28 @@ export function RatingChart({
     })
   }
 
-  function handlePointerMove(event: PointerEvent<SVGRectElement>) {
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!isHovering) setIsHovering(true)
     scheduleHover(event.clientX)
   }
 
   function handlePointerLeave() {
     pendingClientXRef.current = null
-    hoveredIndexRef.current = null
-    setHoveredIndex(null)
+    hoverStateRef.current = null
+    setHoverState(null)
+    setIsHovering(false)
   }
-
-  useEffect(() => {
-    const svg = svgRef.current
-    const wrap = wrapRef.current
-    if (!svg || !wrap || chart.points.length === 0) return
-
-    const lastPoint = chart.points[chart.points.length - 1]
-    const wrapRect = wrap.getBoundingClientRect()
-    setTooltipLeft(getClientXFromSvg(svg, lastPoint.x) - wrapRect.left)
-  }, [chart.points, weeks])
 
   if (weeks.length === 0) {
     return <div className="empty-chart">No sessions logged yet.</div>
   }
 
-  const activeIndex = hoveredIndex ?? chart.points.length - 1
+  const activeIndex = hoverState?.index ?? chart.points.length - 1
   const activePoint = chart.points[activeIndex]
   const activeWeek = activePoint.week
   const isStart = activeIndex === 0
-  const isHovering = hoveredIndex !== null
+  const initialHoverX = hoverState?.x ?? activePoint.x
+  const initialHoverLeft = `${(initialHoverX / CHART_WIDTH) * 100}%`
 
   return (
     <div className="chart-card">
@@ -218,33 +211,42 @@ export function RatingChart({
           <span className="chart-hover-label">
             {isStart ? 'Starting rating' : formatWeekLabel(activeWeek?.label ?? '')}
           </span>
-          {!isStart && activeWeek ? (
-            <small>
-              {activeWeek.wins}-{activeWeek.losses} | {activeWeek.games} game
-              {activeWeek.games === 1 ? '' : 's'}
-            </small>
-          ) : null}
+          <small className={isStart || !activeWeek ? 'chart-placeholder' : undefined}>
+            {!isStart && activeWeek
+              ? `${activeWeek.wins}-${activeWeek.losses} | ${activeWeek.games} game${
+                  activeWeek.games === 1 ? '' : 's'
+                }`
+              : '0-0 | 0 games'}
+          </small>
         </div>
         <div className="chart-hover-values">
           <strong className="chart-hover-rating">{formatRating(activePoint.rating)}</strong>
-          {!isStart && activeWeek ? (
-            <span
-              className={
-                activeWeek.change >= 0 ? 'chart-hover-change positive' : 'chart-hover-change negative'
-              }
-            >
-              {activeWeek.change >= 0 ? '+' : ''}
-              {activeWeek.change.toFixed(3)} week
-            </span>
-          ) : null}
+          <span
+            className={
+              isStart || !activeWeek
+                ? 'chart-hover-change chart-placeholder'
+                : activeWeek.change >= 0
+                  ? 'chart-hover-change positive'
+                  : 'chart-hover-change negative'
+            }
+          >
+            {!isStart && activeWeek
+              ? `${activeWeek.change >= 0 ? '+' : ''}${activeWeek.change.toFixed(3)} week`
+              : '+0.000 week'}
+          </span>
         </div>
       </div>
 
-      <div className="chart-wrap" ref={wrapRef}>
+      <div
+        className="chart-wrap"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+      >
         {isHovering ? (
           <div
+            ref={tooltipRef}
             className="chart-tooltip"
-            style={{ left: `${tooltipLeft}px` }}
+            style={{ left: initialHoverLeft }}
             aria-hidden="true"
           >
             <span className="chart-tooltip-rating">{formatRating(activePoint.rating)}</span>
@@ -277,14 +279,6 @@ export function RatingChart({
                 y2={chart.yAt(tick)}
                 className="chart-grid-line"
               />
-              <text
-                x={PADDING_X - 10}
-                y={chart.yAt(tick) + 4}
-                className="chart-y-label"
-                textAnchor="end"
-              >
-                {tick.toFixed(2)}
-              </text>
             </g>
           ))}
 
@@ -301,8 +295,9 @@ export function RatingChart({
 
           {isHovering ? (
             <line
-              x1={activePoint.x}
-              x2={activePoint.x}
+              ref={hoverLineRef}
+              x1={initialHoverX}
+              x2={initialHoverX}
               y1={PADDING_TOP}
               y2={CHART_HEIGHT - PADDING_BOTTOM}
               className="chart-hover-line"
@@ -321,9 +316,9 @@ export function RatingChart({
             return (
               <g key={point.index}>
                 {isActive ? (
-                  <circle cx={point.x} cy={point.y} r={10} className="chart-dot-ring" />
+                  <circle cx={point.x} cy={point.y} r={13} className="chart-dot-ring" />
                 ) : null}
-                <circle cx={point.x} cy={point.y} r={isActive ? 6 : 4.5} className={dotClass} />
+                <circle cx={point.x} cy={point.y} r={isActive ? 8 : 5.8} className={dotClass} />
               </g>
             )
           })}
@@ -345,25 +340,15 @@ export function RatingChart({
           })}
 
           <rect
-            x={PADDING_X}
-            y={PADDING_TOP}
-            width={chart.plotWidth}
-            height={chart.plotHeight}
+            x={0}
+            y={0}
+            width={CHART_WIDTH}
+            height={CHART_HEIGHT}
             fill="transparent"
             className="chart-hit-area"
-            onPointerMove={handlePointerMove}
-            onPointerLeave={handlePointerLeave}
           />
         </svg>
 
-        {!isHovering ? (
-          <p className="chart-hint">Move over the chart to inspect weekly ratings</p>
-        ) : null}
-      </div>
-
-      <div className="chart-scale">
-        <span>Start {formatRating(startRating)}</span>
-        <span>Now {formatRating(chart.currentChartRating)}</span>
       </div>
     </div>
   )

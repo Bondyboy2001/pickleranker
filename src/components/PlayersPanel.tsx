@@ -1,33 +1,187 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
+import { PlayerAutocomplete } from './PlayerAutocomplete'
 import { RatingChart } from './RatingChart'
 import {
   buildPlayerRatingWeeks,
   DEFAULT_RATING,
-  getPlayerStartingRating,
 } from '../lib/standings'
-import { formatRating, roundRating } from '../lib/scoring'
-import type { AppData, PlayerStanding, PlayerWeekPoint } from '../lib/types'
+import { formatRating } from '../lib/scoring'
+import type { AppData, Match, PlayerStanding, PlayerWeekPoint, SortDirection } from '../lib/types'
+
+type MatchupStat = {
+  playerId: string
+  name: string
+  wins: number
+  losses: number
+  games: number
+}
+
+type HeadToHeadStats = {
+  games: number
+  winsA: number
+  winsB: number
+  pointsA: number
+  pointsB: number
+  latest: Match | null
+}
+
+type HistorySortKey = 'week' | 'games' | 'record' | 'points' | 'change'
+type HistorySort = {
+  key: HistorySortKey
+  direction: SortDirection
+}
 
 function formatWinRate(wins: number, games: number) {
   if (games === 0) return '0.0%'
   return `${((wins / games) * 100).toFixed(1)}%`
 }
 
-function ratingAtWeek(week: PlayerWeekPoint) {
-  return roundRating(DEFAULT_RATING + week.cumulative)
+function compareNumber(left: number, right: number, direction: SortDirection) {
+  return direction === 'asc' ? left - right : right - left
+}
+
+function sortPlayerHistory(weeks: PlayerWeekPoint[], sort: HistorySort) {
+  return [...weeks].sort((left, right) => {
+    let result = 0
+
+    if (sort.key === 'week') {
+      result = new Date(left.playedOn).getTime() - new Date(right.playedOn).getTime()
+    }
+    if (sort.key === 'games') result = left.games - right.games
+    if (sort.key === 'record') {
+      const leftRate = left.games ? left.wins / left.games : 0
+      const rightRate = right.games ? right.wins / right.games : 0
+      result = leftRate - rightRate || left.wins - right.wins || left.games - right.games
+    }
+    if (sort.key === 'points') {
+      result =
+        left.pointsFor - left.pointsAgainst - (right.pointsFor - right.pointsAgainst) ||
+        left.pointsFor - right.pointsFor
+    }
+    if (sort.key === 'change') result = left.change - right.change
+
+    return compareNumber(result, 0, sort.direction) || right.playedOn.localeCompare(left.playedOn)
+  })
+}
+
+function HistorySortableHeader({
+  label,
+  sortKey,
+  activeSort,
+  onSort,
+}: {
+  label: string
+  sortKey: HistorySortKey
+  activeSort: HistorySort
+  onSort: (key: HistorySortKey) => void
+}) {
+  const isActive = activeSort.key === sortKey
+  return (
+    <th>
+      <button
+        type="button"
+        className={isActive ? 'sort-button active' : 'sort-button'}
+        onClick={() => onSort(sortKey)}
+        aria-sort={
+          isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
+        }
+      >
+        {label}
+        <span>{isActive ? (activeSort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    </th>
+  )
+}
+
+function compareByName(left: MatchupStat, right: MatchupStat) {
+  return left.name.localeCompare(right.name) || left.playerId.localeCompare(right.playerId)
+}
+
+function getPlayerTeam(match: Match, playerId: string) {
+  if (match.teamA.includes(playerId)) return 'A'
+  if (match.teamB.includes(playerId)) return 'B'
+  return null
+}
+
+function buildMatchupStats(playerId: string, data: AppData) {
+  const playerNames = new Map(data.players.map((player) => [player.id, player.name]))
+  const matchups = new Map<string, MatchupStat>()
+
+  data.matches.forEach((match) => {
+    const team = getPlayerTeam(match, playerId)
+    if (!team) return
+
+    const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
+    const opponents = team === 'A' ? match.teamB : match.teamA
+
+    opponents.forEach((opponentId) => {
+      const matchup = matchups.get(opponentId) ?? {
+        playerId: opponentId,
+        name: playerNames.get(opponentId) ?? 'Unknown',
+        wins: 0,
+        losses: 0,
+        games: 0,
+      }
+
+      matchup.games += 1
+      matchup.wins += won ? 1 : 0
+      matchup.losses += won ? 0 : 1
+      matchups.set(opponentId, matchup)
+    })
+  })
+
+  const rankedMatchups = [...matchups.values()]
+  const friend = [...rankedMatchups].sort(
+    (a, b) =>
+      b.wins - b.losses - (a.wins - a.losses) ||
+      b.wins - a.wins ||
+      b.games - a.games ||
+      compareByName(a, b),
+  )[0]
+  const foe = [...rankedMatchups].sort(
+    (a, b) =>
+      b.losses - b.wins - (a.losses - a.wins) ||
+      b.losses - a.losses ||
+      b.games - a.games ||
+      compareByName(a, b),
+  )[0]
+
+  return { friend, foe }
+}
+
+function buildHeadToHeadStats(playerAId: string, playerBId: string, matches: Match[]) {
+  const stats: HeadToHeadStats = {
+    games: 0,
+    winsA: 0,
+    winsB: 0,
+    pointsA: 0,
+    pointsB: 0,
+    latest: null,
+  }
+
+  matches.forEach((match) => {
+    const playerATeam = getPlayerTeam(match, playerAId)
+    const playerBTeam = getPlayerTeam(match, playerBId)
+    if (!playerATeam || !playerBTeam || playerATeam === playerBTeam) return
+
+    const playerAPoints = playerATeam === 'A' ? match.scoreA : match.scoreB
+    const playerBPoints = playerBTeam === 'A' ? match.scoreA : match.scoreB
+    const playerAWon = playerAPoints > playerBPoints
+
+    stats.games += 1
+    stats.winsA += playerAWon ? 1 : 0
+    stats.winsB += playerAWon ? 0 : 1
+    stats.pointsA += playerAPoints
+    stats.pointsB += playerBPoints
+    if (!stats.latest || match.playedOn > stats.latest.playedOn) stats.latest = match
+  })
+
+  return stats
 }
 
 function buildProfileStats(player: PlayerStanding, weeks: PlayerWeekPoint[]) {
-  const officialStart = getPlayerStartingRating(player)
   const officialRating = player.rating
-  const replayEnd = weeks.at(-1) ? ratingAtWeek(weeks.at(-1)!) : DEFAULT_RATING
-  const startingRating = DEFAULT_RATING
-  const totalChange = roundRating(replayEnd - DEFAULT_RATING)
-  const peakRating = weeks.reduce(
-    (peak, week) => Math.max(peak, ratingAtWeek(week)),
-    DEFAULT_RATING,
-  )
   const bestWeek = weeks.reduce<PlayerWeekPoint | null>(
     (best, week) => (!best || week.change > best.change ? week : best),
     null,
@@ -38,31 +192,36 @@ function buildProfileStats(player: PlayerStanding, weeks: PlayerWeekPoint[]) {
   )
 
   return {
-    startingRating,
-    officialStart,
     officialRating,
-    replayEnd,
-    totalChange,
-    peakRating,
     bestWeek,
     worstWeek,
-    avgPointsFor: player.games ? player.pointsFor / player.games : 0,
-    avgPointsAgainst: player.games ? player.pointsAgainst / player.games : 0,
+    avgPoints: player.games ? player.pointsFor / player.games : 0,
     weeksPlayed: weeks.filter((week) => week.games > 0).length,
   }
 }
 
 function PlayerProfileDetail({
+  data,
   player,
   rank,
   weeks,
 }: {
+  data: AppData
   player: PlayerStanding
   rank: number
   weeks: PlayerWeekPoint[]
 }) {
   const stats = useMemo(() => buildProfileStats(player, weeks), [player, weeks])
-  const history = useMemo(() => [...weeks].reverse(), [weeks])
+  const matchups = useMemo(() => buildMatchupStats(player.id, data), [player.id, data])
+  const [historySort, setHistorySort] = useState<HistorySort>({ key: 'week', direction: 'desc' })
+  const history = useMemo(() => sortPlayerHistory(weeks, historySort), [weeks, historySort])
+
+  function toggleHistorySort(key: HistorySortKey) {
+    setHistorySort((current) => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
 
   return (
     <aside className="panel players-profile-panel">
@@ -108,29 +267,26 @@ function PlayerProfileDetail({
           <strong>{stats.weeksPlayed}</strong>
         </div>
         <div>
-          <span>Imported start</span>
-          <strong>{formatRating(stats.officialStart)}</strong>
+          <span>Foe</span>
+          <strong>{matchups.foe?.name ?? '—'}</strong>
+          {matchups.foe ? (
+            <small>
+              {matchups.foe.losses}-{matchups.foe.wins} against you
+            </small>
+          ) : null}
         </div>
         <div>
-          <span>Since import</span>
-          <strong
-            className={
-              stats.officialRating - stats.officialStart >= 0 ? 'positive' : 'negative'
-            }
-          >
-            {stats.officialRating - stats.officialStart >= 0 ? '+' : ''}
-            {roundRating(stats.officialRating - stats.officialStart).toFixed(3)}
-          </strong>
-        </div>
-        <div>
-          <span>From 3.0 replay</span>
-          <strong>{formatRating(stats.replayEnd)}</strong>
+          <span>Friend</span>
+          <strong>{matchups.friend?.name ?? '—'}</strong>
+          {matchups.friend ? (
+            <small>
+              {matchups.friend.wins}-{matchups.friend.losses} against them
+            </small>
+          ) : null}
         </div>
         <div>
           <span>Avg points</span>
-          <strong>
-            {stats.avgPointsFor.toFixed(1)} / {stats.avgPointsAgainst.toFixed(1)}
-          </strong>
+          <strong>{stats.avgPoints.toFixed(1)}</strong>
         </div>
         <div>
           <span>Best week</span>
@@ -154,14 +310,8 @@ function PlayerProfileDetail({
         </div>
       </div>
 
-      <p className="players-chart-note">
-        Graph replays all games from a 3.0 start. Leaderboard 4DR uses the imported starting
-        rating ({formatRating(stats.officialStart)}) and only moves on new games saved here.
-      </p>
-
       <RatingChart
         weeks={weeks}
-        currentRating={stats.replayEnd}
         startRating={DEFAULT_RATING}
       />
 
@@ -175,11 +325,36 @@ function PlayerProfileDetail({
             <table className="players-history-table">
               <thead>
                 <tr>
-                  <th>Week</th>
-                  <th>Games</th>
-                  <th>Record</th>
-                  <th>Points</th>
-                  <th>4DR +/-</th>
+                  <HistorySortableHeader
+                    label="Week"
+                    sortKey="week"
+                    activeSort={historySort}
+                    onSort={toggleHistorySort}
+                  />
+                  <HistorySortableHeader
+                    label="Games"
+                    sortKey="games"
+                    activeSort={historySort}
+                    onSort={toggleHistorySort}
+                  />
+                  <HistorySortableHeader
+                    label="Record"
+                    sortKey="record"
+                    activeSort={historySort}
+                    onSort={toggleHistorySort}
+                  />
+                  <HistorySortableHeader
+                    label="Points"
+                    sortKey="points"
+                    activeSort={historySort}
+                    onSort={toggleHistorySort}
+                  />
+                  <HistorySortableHeader
+                    label="4DR +/-"
+                    sortKey="change"
+                    activeSort={historySort}
+                    onSort={toggleHistorySort}
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -207,6 +382,133 @@ function PlayerProfileDetail({
         )}
       </div>
     </aside>
+  )
+}
+
+function HeadToHeadPanel({
+  data,
+  standings,
+}: {
+  data: AppData
+  standings: PlayerStanding[]
+}) {
+  const [playerAId, setPlayerAId] = useState(() => standings[0]?.id ?? '')
+  const [playerBId, setPlayerBId] = useState(() => standings[1]?.id ?? '')
+  const effectivePlayerAId = playerAId || standings[0]?.id || ''
+  const effectivePlayerBId =
+    playerBId ||
+    standings.find((player) => player.id !== effectivePlayerAId)?.id ||
+    ''
+
+  const playerA = useMemo(
+    () => standings.find((player) => player.id === effectivePlayerAId) ?? null,
+    [standings, effectivePlayerAId],
+  )
+  const playerB = useMemo(
+    () => standings.find((player) => player.id === effectivePlayerBId) ?? null,
+    [standings, effectivePlayerBId],
+  )
+  const stats = useMemo(
+    () =>
+      effectivePlayerAId &&
+      effectivePlayerBId &&
+      effectivePlayerAId !== effectivePlayerBId
+        ? buildHeadToHeadStats(effectivePlayerAId, effectivePlayerBId, data.matches)
+        : null,
+    [data.matches, effectivePlayerAId, effectivePlayerBId],
+  )
+  const playerAStatus = stats
+    ? stats.winsA > stats.winsB
+      ? 'winning'
+      : stats.winsA < stats.winsB
+        ? 'losing'
+        : 'tied'
+    : 'tied'
+  const playerBStatus = stats
+    ? stats.winsB > stats.winsA
+      ? 'winning'
+      : stats.winsB < stats.winsA
+        ? 'losing'
+        : 'tied'
+    : 'tied'
+
+  return (
+    <section className="panel head-to-head-panel">
+      <div className="head-to-head-head">
+        <div>
+          <span className="eyebrow">Head to head</span>
+          <h2>Compare players</h2>
+        </div>
+      </div>
+
+      <div className="head-to-head-inputs">
+        <PlayerAutocomplete
+          players={standings}
+          value={effectivePlayerAId}
+          onChange={setPlayerAId}
+          excludeIds={effectivePlayerBId ? [effectivePlayerBId] : []}
+          placeholder="First player"
+        />
+        <PlayerAutocomplete
+          players={standings}
+          value={effectivePlayerBId}
+          onChange={setPlayerBId}
+          excludeIds={effectivePlayerAId ? [effectivePlayerAId] : []}
+          placeholder="Second player"
+        />
+      </div>
+
+      {playerA && playerB && stats ? (
+        <div className="head-to-head-results">
+          <div className={`head-to-head-player-card ${playerAStatus}`}>
+            <div className="head-to-head-player-top">
+              <span>{playerA.name}</span>
+              <strong>{formatWinRate(stats.winsA, stats.games)}</strong>
+            </div>
+            <b>{stats.winsA}</b>
+          </div>
+
+          <div className={`head-to-head-player-card ${playerBStatus}`}>
+            <div className="head-to-head-player-top">
+              <span>{playerB.name}</span>
+              <strong>{formatWinRate(stats.winsB, stats.games)}</strong>
+            </div>
+            <b>{stats.winsB}</b>
+          </div>
+
+          <div className="head-to-head-summary">
+            <div>
+              <span>Games</span>
+              <strong>{stats.games}</strong>
+            </div>
+            <div>
+              <span>Total points</span>
+              <strong>
+                {stats.pointsA}-{stats.pointsB}
+              </strong>
+            </div>
+            <div>
+              <span>Avg points</span>
+              <strong>
+                {stats.games ? (stats.pointsA / stats.games).toFixed(1) : '0.0'} /{' '}
+                {stats.games ? (stats.pointsB / stats.games).toFixed(1) : '0.0'}
+              </strong>
+            </div>
+            <div>
+              <span>Latest</span>
+              <strong>
+                {stats.latest
+                  ? `${getPlayerTeam(stats.latest, playerA.id) === 'A' ? stats.latest.scoreA : stats.latest.scoreB}-${getPlayerTeam(stats.latest, playerB.id) === 'A' ? stats.latest.scoreA : stats.latest.scoreB}`
+                  : '—'}
+              </strong>
+              {stats.latest ? <small>{stats.latest.week.replace(/^Results\s+/, '')}</small> : null}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="head-to-head-empty">Select two players.</p>
+      )}
+    </section>
   )
 }
 
@@ -242,61 +544,65 @@ export function PlayersPanel({
 
   return (
     <div className="players-workspace">
-      <section className="panel players-list-panel">
-        <div className="panel-heading players-heading">
-          <label className="search-control players-search">
-            <Search size={18} />
-            <input
-              type="search"
-              placeholder="Search players..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              aria-label="Search players"
-            />
-          </label>
-        </div>
-        <div className="players-list">
-          {filteredPlayers.map((player) => {
-            const rank = rankByPlayerId.get(player.id) ?? 0
-            const isSelected = player.id === selectedPlayerId
-            return (
-              <button
-                key={player.id}
-                type="button"
-                className={`players-list-item${isSelected ? ' selected' : ''}`}
-                onClick={() => setSelectedPlayerId(player.id)}
-              >
-                <span
-                  className={`players-list-rank rank-pos-${rank <= 3 ? rank : 'other'}`}
-                  data-rank={rank}
+      <div className="players-main-column">
+        <HeadToHeadPanel data={data} standings={standings} />
+        <section className="panel players-list-panel">
+          <div className="panel-heading players-heading">
+            <label className="search-control players-search">
+              <Search size={18} />
+              <input
+                type="search"
+                placeholder="Search players..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                aria-label="Search players"
+              />
+            </label>
+          </div>
+          <div className="players-list">
+            {filteredPlayers.map((player) => {
+              const rank = rankByPlayerId.get(player.id) ?? 0
+              const isSelected = player.id === selectedPlayerId
+              return (
+                <button
+                  key={player.id}
+                  type="button"
+                  className={`players-list-item${isSelected ? ' selected' : ''}`}
+                  onClick={() => setSelectedPlayerId(player.id)}
                 >
-                  {rank}
-                </span>
-                <span className="player-avatar" aria-hidden="true">
-                  {player.name.slice(0, 1)}
-                </span>
-                <span className="players-list-copy">
-                  <strong>{player.name}</strong>
-                  <small>
-                    {formatRating(player.rating)} · {player.wins}-{player.losses} ·{' '}
-                    {player.games} game{player.games === 1 ? '' : 's'}
-                  </small>
-                </span>
-              </button>
-            )
-          })}
-          {filteredPlayers.length === 0 ? (
-            <p className="players-list-empty">
-              {standings.length === 0
-                ? 'No players yet.'
-                : `No players match "${search.trim()}".`}
-            </p>
-          ) : null}
-        </div>
-      </section>
+                  <span
+                    className={`players-list-rank rank-pos-${rank <= 3 ? rank : 'other'}`}
+                    data-rank={rank}
+                  >
+                    {rank}
+                  </span>
+                  <span className="player-avatar" aria-hidden="true">
+                    {player.name.slice(0, 1)}
+                  </span>
+                  <span className="players-list-copy">
+                    <strong>{player.name}</strong>
+                    <small>
+                      {formatRating(player.rating)} · {player.wins}-{player.losses} ·{' '}
+                      {player.games} game{player.games === 1 ? '' : 's'}
+                    </small>
+                  </span>
+                </button>
+              )
+            })}
+            {filteredPlayers.length === 0 ? (
+              <p className="players-list-empty">
+                {standings.length === 0
+                  ? 'No players yet.'
+                  : `No players match "${search.trim()}".`}
+              </p>
+            ) : null}
+          </div>
+        </section>
+      </div>
 
       {selectedPlayer ? (
         <PlayerProfileDetail
+          data={data}
           player={selectedPlayer}
           rank={rankByPlayerId.get(selectedPlayer.id) ?? 0}
           weeks={selectedWeeks}

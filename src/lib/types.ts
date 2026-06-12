@@ -60,6 +60,7 @@ export type PlayerWeekPoint = {
 export type WeeklyStanding = {
   playerId: string
   name: string
+  rating: number
   change: number
   wins: number
   losses: number
@@ -99,7 +100,7 @@ export type WeeklyPlayerGame = {
 }
 
 export type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games' | 'wins' | 'losses' | 'pointDiff'
-export type WeeklySortKey = 'rank' | 'player' | 'weeklyChange' | 'recordDiff'
+export type WeeklySortKey = 'rank' | 'player' | 'rating' | 'weeklyChange' | 'recordDiff'
 export type SortDirection = 'asc' | 'desc'
 
 export type DbPlayer = {

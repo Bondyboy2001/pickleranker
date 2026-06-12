@@ -4,12 +4,13 @@ type AdminFieldProps = {
   label: string
   children: ReactNode
   className?: string
+  hideLabel?: boolean
 }
 
-export function AdminField({ label, children, className = '' }: AdminFieldProps) {
+export function AdminField({ label, children, className = '', hideLabel = false }: AdminFieldProps) {
   return (
     <label className={`admin-field ${className}`.trim()}>
-      <span>{label}</span>
+      <span className={hideLabel ? 'sr-only' : undefined}>{label}</span>
       {children}
     </label>
   )
