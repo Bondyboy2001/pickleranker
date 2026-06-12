@@ -589,6 +589,13 @@ td span {
   color: var(--danger);
 }
 
+.players-chart-note {
+  margin: 0 18px 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .players-history {
   padding: 0 0 12px;
 }

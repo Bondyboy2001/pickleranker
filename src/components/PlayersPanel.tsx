@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { RatingChart } from './RatingChart'
-import { buildPlayerRatingWeeks, DEFAULT_RATING } from '../lib/standings'
+import {
+  buildPlayerRatingWeeks,
+  DEFAULT_RATING,
+  getPlayerStartingRating,
+} from '../lib/standings'
 import { formatRating, roundRating } from '../lib/scoring'
 import type { AppData, PlayerStanding, PlayerWeekPoint } from '../lib/types'
 
@@ -15,10 +19,11 @@ function ratingAtWeek(week: PlayerWeekPoint) {
 }
 
 function buildProfileStats(player: PlayerStanding, weeks: PlayerWeekPoint[]) {
+  const officialStart = getPlayerStartingRating(player)
+  const officialRating = player.rating
+  const replayEnd = weeks.at(-1) ? ratingAtWeek(weeks.at(-1)!) : DEFAULT_RATING
   const startingRating = DEFAULT_RATING
-  const latestWeek = weeks.at(-1)
-  const currentRating = latestWeek ? ratingAtWeek(latestWeek) : DEFAULT_RATING
-  const totalChange = latestWeek?.cumulative ?? 0
+  const totalChange = roundRating(replayEnd - DEFAULT_RATING)
   const peakRating = weeks.reduce(
     (peak, week) => Math.max(peak, ratingAtWeek(week)),
     DEFAULT_RATING,
@@ -34,7 +39,9 @@ function buildProfileStats(player: PlayerStanding, weeks: PlayerWeekPoint[]) {
 
   return {
     startingRating,
-    currentRating,
+    officialStart,
+    officialRating,
+    replayEnd,
     totalChange,
     peakRating,
     bestWeek,
@@ -73,8 +80,8 @@ function PlayerProfileDetail({
           </div>
         </div>
         <div className="players-profile-rating">
-          <span>Current 4DR</span>
-          <strong>{formatRating(stats.currentRating)}</strong>
+          <span>Leaderboard 4DR</span>
+          <strong>{formatRating(stats.officialRating)}</strong>
         </div>
       </div>
 
@@ -101,19 +108,23 @@ function PlayerProfileDetail({
           <strong>{stats.weeksPlayed}</strong>
         </div>
         <div>
-          <span>Starting 4DR</span>
-          <strong>{formatRating(stats.startingRating)}</strong>
+          <span>Imported start</span>
+          <strong>{formatRating(stats.officialStart)}</strong>
         </div>
         <div>
-          <span>Total change</span>
-          <strong className={stats.totalChange >= 0 ? 'positive' : 'negative'}>
-            {stats.totalChange >= 0 ? '+' : ''}
-            {stats.totalChange.toFixed(3)}
+          <span>Since import</span>
+          <strong
+            className={
+              stats.officialRating - stats.officialStart >= 0 ? 'positive' : 'negative'
+            }
+          >
+            {stats.officialRating - stats.officialStart >= 0 ? '+' : ''}
+            {roundRating(stats.officialRating - stats.officialStart).toFixed(3)}
           </strong>
         </div>
         <div>
-          <span>Peak 4DR</span>
-          <strong>{formatRating(stats.peakRating)}</strong>
+          <span>From 3.0 replay</span>
+          <strong>{formatRating(stats.replayEnd)}</strong>
         </div>
         <div>
           <span>Avg points</span>
@@ -143,9 +154,14 @@ function PlayerProfileDetail({
         </div>
       </div>
 
+      <p className="players-chart-note">
+        Graph replays all games from a 3.0 start. Leaderboard 4DR uses the imported starting
+        rating ({formatRating(stats.officialStart)}) and only moves on new games saved here.
+      </p>
+
       <RatingChart
         weeks={weeks}
-        currentRating={stats.currentRating}
+        currentRating={stats.replayEnd}
         startRating={DEFAULT_RATING}
       />
 

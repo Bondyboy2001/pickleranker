@@ -80,10 +80,7 @@ export function RatingChart({
       startRating,
       ...weeks.map((week) => roundRating(startRating + week.cumulative)),
     ]
-    if (ratings.length > 1) {
-      ratings[ratings.length - 1] = currentRating
-    }
-    const currentChartRating = currentRating
+    const currentChartRating = ratings.at(-1) ?? currentRating
     const pointCount = ratings.length
     const chartWidth = CHART_WIDTH - PADDING_X * 2
     const chartHeight = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM

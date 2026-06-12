@@ -45,7 +45,7 @@ import {
 import {
   buildPlayerRatingWeeks,
   buildStandings,
-  getPlayerStartingRating,
+  DEFAULT_RATING,
   buildWeekOptions,
   buildWeeklyPlayerGames,
   buildWeeklyStandings,
@@ -786,7 +786,7 @@ function App() {
                     {filteredStandings.map((player) => {
                       const isSelected = selectedPlayerId === player.id
                       const playerWeeks = isSelected
-                        ? buildPlayerRatingWeeks(player.id, data, 'standing')
+                        ? buildPlayerRatingWeeks(player.id, data, 'fromDefault')
                         : []
                       const rank = rankByPlayerId.get(player.id) ?? 0
                       return (
@@ -838,7 +838,7 @@ function App() {
                                 <PlayerDetailPanel
                                   player={player}
                                   weeks={playerWeeks}
-                                  startRating={getPlayerStartingRating(player)}
+                                  startRating={DEFAULT_RATING}
                                 />
                               </td>
                             </tr>
@@ -1725,7 +1725,11 @@ function PlayerDetailPanel({
   weeks: PlayerWeekPoint[]
   startRating: number
 }) {
-  const totalChange = roundRating(player.rating - startRating)
+  const latestWeek = weeks.at(-1)
+  const replayRating = latestWeek
+    ? roundRating(startRating + latestWeek.cumulative)
+    : startRating
+  const totalChange = latestWeek?.cumulative ?? 0
   const bestWeek = weeks.reduce<PlayerWeekPoint | null>(
     (best, week) => (!best || week.change > best.change ? week : best),
     null,
@@ -1736,7 +1740,7 @@ function PlayerDetailPanel({
     <section className="panel player-panel">
       <RatingChart
         weeks={weeks}
-        currentRating={player.rating}
+        currentRating={replayRating}
         startRating={startRating}
       />
 
