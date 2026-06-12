@@ -256,6 +256,25 @@ function App() {
     [summaries, weeklySnapshots],
   )
   const activeWeek = selectedWeek || weekOptions[0]?.key || ''
+  const latestWeekKey = weekOptions[0]?.key ?? ''
+  const latestWeekStandings = useMemo(
+    () =>
+      latestWeekKey
+        ? buildWeeklyStandings(
+            latestWeekKey,
+            summaries,
+            data.players,
+            data.matches,
+            weeklySnapshots,
+          )
+        : [],
+    [latestWeekKey, summaries, data.players, data.matches, weeklySnapshots],
+  )
+  const mostImprovedPlayer = useMemo(() => {
+    const activePlayers = latestWeekStandings.filter((player) => player.games > 0)
+    if (activePlayers.length === 0) return null
+    return activePlayers.reduce((best, player) => (player.change > best.change ? player : best))
+  }, [latestWeekStandings])
   const averageRating = useMemo(() => {
     if (standings.length === 0) return 0
     return standings.reduce((total, player) => total + player.rating, 0) / standings.length
@@ -790,6 +809,11 @@ function App() {
                 recentMatches={recentMatches}
                 playerNameById={playerNameById}
                 averageRating={averageRating}
+                mostImprovedPlayer={
+                  mostImprovedPlayer
+                    ? { name: mostImprovedPlayer.name, change: mostImprovedPlayer.change }
+                    : null
+                }
                 lastUpdated={lastUpdated}
               />
             ) : activeTab === 'weekly' ? (

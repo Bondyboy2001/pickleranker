@@ -2,10 +2,9 @@ import { CalendarDays, Trophy } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { SortableHeader } from './SortableHeader'
 import { ColumnLegend } from './ColumnLegend'
-import { Podium } from './Podium'
 import { RecentActivity } from './RecentActivity'
 import { StickyPlayerBar } from './StickyPlayerBar'
-import { formatWinRate } from '../lib/format'
+import { formatSignedPoints, formatWinRate } from '../lib/format'
 import { formatRating } from '../lib/scoring'
 import type { Match, PlayerStanding, SortDirection, SortKey } from '../lib/types'
 
@@ -42,6 +41,7 @@ type OverallLeaderboardProps = {
   recentMatches: Match[]
   playerNameById: Map<string, string>
   averageRating: number
+  mostImprovedPlayer: { name: string; change: number } | null
   lastUpdated: string
 }
 
@@ -64,6 +64,7 @@ export function OverallLeaderboard({
   recentMatches,
   playerNameById,
   averageRating,
+  mostImprovedPlayer,
   lastUpdated,
 }: OverallLeaderboardProps) {
   const searchPlayers = standings.map((player) => ({ id: player.id, name: player.name }))
@@ -80,9 +81,9 @@ export function OverallLeaderboard({
             <Trophy size={28} />
           </span>
           <div>
-            <span>Top rated</span>
-            <strong>{standings[0]?.name ?? '-'}</strong>
-            <b>{standings[0] ? formatRating(standings[0].rating) : '0.000'}</b>
+            <span>Most improved player</span>
+            <strong>{mostImprovedPlayer?.name ?? '-'}</strong>
+            <b>{mostImprovedPlayer ? formatSignedPoints(mostImprovedPlayer.change) : '-'}</b>
           </div>
         </div>
         <div className="summary-card">
@@ -104,8 +105,6 @@ export function OverallLeaderboard({
           </div>
         </div>
       </section>
-
-      <Podium standings={standings} rankByPlayerId={rankByPlayerId} onPlayerSelect={onPlayerSelect} />
 
       <RecentActivity matches={recentMatches} playerNameById={playerNameById} limit={5} />
 
