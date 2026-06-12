@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  Download,
   LineChart,
   LogIn,
   LogOut,
@@ -15,12 +16,16 @@ import {
   Sun,
   Trash2,
   Trophy,
+  Upload,
 } from 'lucide-react'
 import './App.css'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { NoticeBanner } from './components/NoticeBanner'
+import { RatingExplainer } from './components/RatingExplainer'
 import { TournamentPanel } from './components/TournamentPanel'
 import {
   checkIsAdmin,
+  exportDataSnapshot,
   formatPlayedOnDate,
   formatResultsLabel,
   isSupabaseConfigured,
@@ -29,6 +34,8 @@ import {
   loadRemoteData,
   makeId,
   matchToDb,
+  parseImportedData,
+  playerHasMatches,
   playerToDb,
   saveLocalData,
 } from './lib/data'
@@ -61,6 +68,11 @@ const THEME_STORAGE_KEY = 'pickleranker-theme'
 const LEADERBOARD_COLUMN_COUNT = 8
 const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
+const PUBLIC_REFRESH_MS = 60_000
+
+type ConfirmAction =
+  | { type: 'match'; id: string }
+  | { type: 'player'; id: string; name: string }
 
 const emptyMatch: MatchFormState = {
   playedOn: new Date().toISOString().slice(0, 10),
@@ -111,8 +123,12 @@ function App() {
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [matchError, setMatchError] = useState('')
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [weeklySearch, setWeeklySearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
+  const [savingAction, setSavingAction] = useState<string | null>(null)
 
   const canEdit = !isSupabaseConfigured || isAdmin
 
@@ -151,7 +167,8 @@ function App() {
   }, [notice])
 
   useEffect(() => {
-    if (!supabase) return
+    const client = supabase
+    if (!client) return
 
     let cancelled = false
 
@@ -165,13 +182,13 @@ function App() {
       })
     }
 
-    supabase.auth.getSession().then(({ data: authData }) => {
+    client.auth.getSession().then(({ data: authData }) => {
       if (cancelled) return
       setSession(authData.session)
       syncAdmin(authData.session)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = client.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
       syncAdmin(nextSession)
     })
@@ -190,11 +207,30 @@ function App() {
         setNotice(text)
       })
 
+    const channel = client
+      .channel('pickleranker-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        void refreshRemoteData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => {
+        void refreshRemoteData()
+      })
+      .subscribe()
+
     return () => {
       cancelled = true
       listener.subscription.unsubscribe()
+      void client.removeChannel(channel)
     }
-  }, [])
+  }, [refreshRemoteData])
+
+  useEffect(() => {
+    if (!supabase || route === '#/admin') return
+    const pollTimer = window.setInterval(() => {
+      void refreshRemoteData()
+    }, PUBLIC_REFRESH_MS)
+    return () => window.clearInterval(pollTimer)
+  }, [refreshRemoteData, route])
 
   const applyData = useCallback((nextData: AppData, message: string) => {
     if (!isSupabaseConfigured) saveLocalData(nextData)
@@ -230,6 +266,11 @@ function App() {
     if (!query) return sortedStandings
     return sortedStandings.filter((player) => player.name.toLowerCase().includes(query))
   }, [search, sortedStandings])
+  const filteredWeeklyStandings = useMemo(() => {
+    const query = weeklySearch.trim().toLowerCase()
+    if (!query) return weeklyStandings
+    return weeklyStandings.filter((player) => player.name.toLowerCase().includes(query))
+  }, [weeklySearch, weeklyStandings])
   const weeklyPlayerGames = useMemo(
     () =>
       selectedWeeklyPlayerId
@@ -303,18 +344,121 @@ function App() {
     const skillLevel = Number(playerForm.skillLevel)
     if (!name || Number.isNaN(skillLevel)) return
 
-    const player: Player = { id: makeId('p'), name, skillLevel }
+    setSavingAction('player')
+    try {
+      if (editingPlayerId) {
+        const existing = data.players.find((player) => player.id === editingPlayerId)
+        if (!existing) return
 
-    if (supabase) {
-      const { error } = await supabase.from('players').insert(playerToDb(player))
-      if (error) {
-        setNotice(error.message)
+        const updated: Player = { ...existing, name, skillLevel }
+
+        if (supabase) {
+          const { error } = await supabase
+            .from('players')
+            .update(playerToDb(updated))
+            .eq('id', editingPlayerId)
+          if (error) {
+            setNotice(error.message)
+            return
+          }
+        }
+
+        applyData(
+          {
+            ...data,
+            players: data.players.map((player) =>
+              player.id === editingPlayerId ? updated : player,
+            ),
+          },
+          `${name} updated.`,
+        )
+        setEditingPlayerId(null)
+        setPlayerForm({ name: '', skillLevel: '3.0' })
         return
       }
-    }
 
-    applyData({ ...data, players: [...data.players, player] }, `${name} added at ${skillLevel.toFixed(1)}.`)
+      const player: Player = { id: makeId('p'), name, skillLevel }
+
+      if (supabase) {
+        const { error } = await supabase.from('players').insert(playerToDb(player))
+        if (error) {
+          setNotice(error.message)
+          return
+        }
+      }
+
+      applyData({ ...data, players: [...data.players, player] }, `${name} added at ${skillLevel.toFixed(1)}.`)
+      setPlayerForm({ name: '', skillLevel: '3.0' })
+    } finally {
+      setSavingAction(null)
+    }
+  }
+
+  function startEditPlayer(player: Player) {
+    setEditingPlayerId(player.id)
+    setPlayerForm({ name: player.name, skillLevel: String(player.skillLevel) })
+  }
+
+  function cancelEditPlayer() {
+    setEditingPlayerId(null)
     setPlayerForm({ name: '', skillLevel: '3.0' })
+  }
+
+  function requestDeletePlayer(playerId: string) {
+    const player = data.players.find((entry) => entry.id === playerId)
+    if (!player) return
+    if (playerHasMatches(playerId, data.matches)) {
+      setNotice(`${player.name} still has saved games and cannot be deleted.`)
+      return
+    }
+    setConfirmAction({ type: 'player', id: playerId, name: player.name })
+  }
+
+  async function deletePlayer(playerId: string) {
+    if (!requireAdmin()) return
+
+    setSavingAction('delete-player')
+    try {
+      if (supabase) {
+        const { error } = await supabase.from('players').delete().eq('id', playerId)
+        if (error) {
+          setNotice(error.message)
+          return
+        }
+      }
+
+      if (editingPlayerId === playerId) cancelEditPlayer()
+      applyData(
+        { ...data, players: data.players.filter((player) => player.id !== playerId) },
+        'Player removed.',
+      )
+    } finally {
+      setSavingAction(null)
+    }
+  }
+
+  function exportLocalBackup() {
+    const blob = new Blob([exportDataSnapshot(data)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `pickleranker-backup-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setNotice('Backup downloaded.')
+  }
+
+  function importLocalBackup(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = parseImportedData(String(reader.result ?? ''))
+      if ('error' in result) {
+        setNotice(result.error)
+        return
+      }
+      applyData(result, 'Backup imported on this device.')
+    }
+    reader.readAsText(file)
   }
 
   function validateMatchForm() {
@@ -352,6 +496,8 @@ function App() {
     const validated = validateMatchForm()
     if (!validated) return
 
+    setSavingAction('match')
+    try {
     const match: Match = {
       id: editingMatchId ?? makeId('m'),
       week: formatResultsLabel(matchForm.playedOn),
@@ -382,6 +528,9 @@ function App() {
     )
     setEditingMatchId(null)
     setMatchForm((current) => ({ ...emptyMatch, playedOn: current.playedOn }))
+    } finally {
+      setSavingAction(null)
+    }
   }
 
   function startEditMatch(match: Match) {
@@ -407,23 +556,40 @@ function App() {
     setMatchForm(emptyMatch)
   }
 
+  function requestDeleteMatch(matchId: string) {
+    if (!requireAdmin()) return
+    setConfirmAction({ type: 'match', id: matchId })
+  }
+
   async function deleteMatch(matchId: string) {
     if (!requireAdmin()) return
-    if (!window.confirm('Delete this game? Ratings will be recalculated.')) return
 
-    if (supabase) {
-      const { error } = await supabase.from('matches').delete().eq('id', matchId)
-      if (error) {
-        setNotice(error.message)
-        return
+    setSavingAction('delete-match')
+    try {
+      if (supabase) {
+        const { error } = await supabase.from('matches').delete().eq('id', matchId)
+        if (error) {
+          setNotice(error.message)
+          return
+        }
       }
-    }
 
-    if (editingMatchId === matchId) cancelEditMatch()
-    applyData(
-      { ...data, matches: data.matches.filter((match) => match.id !== matchId) },
-      'Game deleted.',
-    )
+      if (editingMatchId === matchId) cancelEditMatch()
+      applyData(
+        { ...data, matches: data.matches.filter((match) => match.id !== matchId) },
+        'Game deleted.',
+      )
+    } finally {
+      setSavingAction(null)
+    }
+  }
+
+  async function handleConfirmAction() {
+    if (!confirmAction) return
+    const action = confirmAction
+    setConfirmAction(null)
+    if (action.type === 'match') await deleteMatch(action.id)
+    if (action.type === 'player') await deletePlayer(action.id)
   }
 
   async function saveTournamentRound(newMatches: Match[]) {
@@ -451,9 +617,39 @@ function App() {
     }))
   }
 
+  const confirmDialog =
+    confirmAction?.type === 'match'
+      ? {
+          title: 'Delete this game?',
+          message: 'Ratings will be recalculated for everyone who played in it.',
+          confirmLabel: 'Delete game',
+        }
+      : confirmAction?.type === 'player'
+        ? {
+            title: `Remove ${confirmAction.name}?`,
+            message: 'This only works when the player has no saved games.',
+            confirmLabel: 'Remove player',
+          }
+        : null
+
   return (
     <main className="app-shell">
       <NoticeBanner message={notice} onDismiss={() => setNotice('')} />
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        danger
+        onConfirm={() => void handleConfirmAction()}
+        onCancel={() => setConfirmAction(null)}
+      />
+      {!isSupabaseConfigured ? (
+        <div className="dev-mode-banner" role="status">
+          <strong>Development mode.</strong> Scores save only in this browser. Set up Supabase and
+          deploy env vars so everyone sees the same leaderboard.
+        </div>
+      ) : null}
 
       <header className="topbar">
         <div className="brand-lockup">
@@ -491,9 +687,11 @@ function App() {
           >
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <a className="ghost-link admin-link" href={route === '#/admin' ? '#/' : '#/admin'}>
-            {route === '#/admin' ? 'View public site' : 'Admin login'}
-          </a>
+          {route === '#/admin' ? (
+            <a className="ghost-link admin-link" href="#/">
+              View public site
+            </a>
+          ) : null}
         </div>
       </header>
 
@@ -516,6 +714,7 @@ function App() {
           canEdit={canEdit}
           data={data}
           editingMatchId={editingMatchId}
+          editingPlayerId={editingPlayerId}
           isAdmin={isAdmin}
           isSupabaseConfigured={isSupabaseConfigured}
           matchError={matchError}
@@ -523,6 +722,7 @@ function App() {
           playerForm={playerForm}
           playerNameById={playerNameById}
           recentMatches={recentMatches}
+          savingAction={savingAction}
           session={session}
           standings={standings}
           saveTournamentRound={saveTournamentRound}
@@ -533,13 +733,19 @@ function App() {
           signIn={signIn}
           signOut={signOut}
           addPlayer={addPlayer}
+          cancelEditPlayer={cancelEditPlayer}
+          exportLocalBackup={exportLocalBackup}
+          importLocalBackup={importLocalBackup}
+          requestDeletePlayer={requestDeletePlayer}
           saveMatch={saveMatch}
           cancelEditMatch={cancelEditMatch}
           startEditMatch={startEditMatch}
-          deleteMatch={deleteMatch}
+          startEditPlayer={startEditPlayer}
+          requestDeleteMatch={requestDeleteMatch}
         />
       ) : (
         <div className="public-dashboard">
+          <RatingExplainer />
           <section className="summary-strip" aria-label="League summary">
             <div className="summary-card">
               <span className="summary-icon">
@@ -587,7 +793,7 @@ function App() {
                   />
                 </label>
               </div>
-              <div className="table-wrap">
+              <div className="table-wrap leaderboard-table-wrap">
                 <table className="leaderboard-table">
                   <thead>
                     <tr>
@@ -682,21 +888,33 @@ function App() {
                     <h2>Weekly leaderboard</h2>
                     <p>Players ranked by 4DR points gained in the selected week.</p>
                   </div>
-                  <select
-                    className="week-select"
-                    value={activeWeek}
-                    onChange={(event) => {
-                      setSelectedWeek(event.target.value)
-                      setSelectedWeeklyPlayerId(null)
-                    }}
-                    aria-label="Select week"
-                  >
-                    {weekOptions.map((week) => (
-                      <option key={week.key} value={week.key}>
-                        {week.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="weekly-heading-controls">
+                    <label className="search-control weekly-search">
+                      <Search size={18} />
+                      <input
+                        type="search"
+                        placeholder="Search players..."
+                        value={weeklySearch}
+                        onChange={(event) => setWeeklySearch(event.target.value)}
+                        aria-label="Search weekly players"
+                      />
+                    </label>
+                    <select
+                      className="week-select"
+                      value={activeWeek}
+                      onChange={(event) => {
+                        setSelectedWeek(event.target.value)
+                        setSelectedWeeklyPlayerId(null)
+                      }}
+                      aria-label="Select week"
+                    >
+                      {weekOptions.map((week) => (
+                        <option key={week.key} value={week.key}>
+                          {week.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="table-wrap">
                   <table className="weekly-table">
@@ -709,7 +927,7 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {weeklyStandings.map((player, index) => {
+                      {filteredWeeklyStandings.map((player, index) => {
                         const pointDifference = player.pointsFor - player.pointsAgainst
                         const recordDifference = player.wins - player.losses
                         return (
@@ -751,12 +969,14 @@ function App() {
                           </tr>
                         )
                       })}
-                      {weeklyStandings.length === 0 ? (
+                      {filteredWeeklyStandings.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="empty-table">
                             {weekOptions.length === 0
                               ? 'No games recorded yet.'
-                              : 'No games found for this week.'}
+                              : weeklySearch.trim()
+                                ? `No players match "${weeklySearch.trim()}".`
+                                : 'No games found for this week.'}
                           </td>
                         </tr>
                       ) : null}
@@ -772,6 +992,11 @@ function App() {
               />
             </div>
           )}
+          <footer className="public-footer">
+            <a className="footer-admin-link" href="#/admin">
+              Admin
+            </a>
+          </footer>
         </div>
       )}
     </main>
@@ -784,6 +1009,7 @@ function AdminPage({
   canEdit,
   data,
   editingMatchId,
+  editingPlayerId,
   isAdmin,
   isSupabaseConfigured,
   matchError,
@@ -791,6 +1017,7 @@ function AdminPage({
   playerForm,
   playerNameById,
   recentMatches,
+  savingAction,
   session,
   standings,
   saveTournamentRound,
@@ -801,16 +1028,22 @@ function AdminPage({
   signIn,
   signOut,
   addPlayer,
+  cancelEditPlayer,
+  exportLocalBackup,
+  importLocalBackup,
+  requestDeletePlayer,
   saveMatch,
   cancelEditMatch,
   startEditMatch,
-  deleteMatch,
+  startEditPlayer,
+  requestDeleteMatch,
 }: {
   authForm: { username: string; password: string }
   authError: string
   canEdit: boolean
   data: AppData
   editingMatchId: string | null
+  editingPlayerId: string | null
   isAdmin: boolean
   isSupabaseConfigured: boolean
   matchError: string
@@ -818,6 +1051,7 @@ function AdminPage({
   playerForm: { name: string; skillLevel: string }
   playerNameById: Map<string, string>
   recentMatches: Match[]
+  savingAction: string | null
   session: Session | null
   standings: PlayerStanding[]
   saveTournamentRound: (matches: Match[]) => Promise<boolean>
@@ -828,13 +1062,23 @@ function AdminPage({
   signIn: (event: FormEvent<HTMLFormElement>) => void
   signOut: () => void
   addPlayer: (event: FormEvent<HTMLFormElement>) => void
+  cancelEditPlayer: () => void
+  exportLocalBackup: () => void
+  importLocalBackup: (file: File) => void
+  requestDeletePlayer: (playerId: string) => void
   saveMatch: (event: FormEvent<HTMLFormElement>) => void
   cancelEditMatch: () => void
   startEditMatch: (match: Match) => void
-  deleteMatch: (matchId: string) => void
+  startEditPlayer: (player: Player) => void
+  requestDeleteMatch: (matchId: string) => void
 }) {
   const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
+  const importInputRef = useRef<HTMLInputElement>(null)
+  const sortedPlayers = useMemo(
+    () => [...data.players].sort((a, b) => a.name.localeCompare(b.name)),
+    [data.players],
+  )
 
   const updateMatchForm = (next: Partial<MatchFormState>) => {
     setMatchForm({ ...matchForm, ...next })
@@ -854,7 +1098,7 @@ function AdminPage({
                     ? 'Signed in as admin. Updates save online.'
                     : 'Signed in, but this account is not listed as an admin.'
                   : 'Sign in with username ben to update games and players.'
-                : 'Supabase is not configured, so local admin mode is enabled on this device.'}
+                : 'Development mode — scores save only in this browser until Supabase is configured.'}
             </p>
           </div>
         </div>
@@ -891,8 +1135,35 @@ function AdminPage({
             </form>
           )
         ) : (
-          <div className="admin-status">
-            <span>Local editing is active on this computer.</span>
+          <div className="local-admin-tools">
+            <div className="admin-status">
+              <span>Local editing is active on this device only. Export a backup before clearing browser data.</span>
+            </div>
+            <div className="local-data-actions">
+              <button type="button" className="ghost-button" onClick={exportLocalBackup}>
+                <Download size={16} />
+                Export backup
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => importInputRef.current?.click()}
+              >
+                <Upload size={16} />
+                Import backup
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) importLocalBackup(file)
+                  event.target.value = ''
+                }}
+              />
+            </div>
           </div>
         )}
       </section>
@@ -1007,9 +1278,17 @@ function AdminPage({
 
               {matchError ? <p className="form-error">{matchError}</p> : null}
               <div className="form-actions">
-                <button type="submit" className="primary-button">
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={savingAction === 'match'}
+                >
                   <Save size={17} />
-                  {editingMatchId ? 'Update game' : 'Save game'}
+                  {savingAction === 'match'
+                    ? 'Saving...'
+                    : editingMatchId
+                      ? 'Update game'
+                      : 'Save game'}
                 </button>
                 {editingMatchId ? (
                   <button type="button" className="ghost-button" onClick={cancelEditMatch}>
@@ -1020,10 +1299,10 @@ function AdminPage({
             </form>
           </section>
 
-          <section className="panel">
+          <section className="panel players-panel">
             <div className="panel-heading">
               <div>
-                <h2>Add player</h2>
+                <h2>{editingPlayerId ? 'Edit player' : 'Add player'}</h2>
                 <p>New players start from their skill level.</p>
               </div>
             </div>
@@ -1045,10 +1324,61 @@ function AdminPage({
                 <option value="4.0">4.0</option>
                 <option value="4.5">4.5</option>
               </select>
-              <button type="submit" className="icon-button" aria-label="Add player">
-                <Plus size={18} />
+              <button
+                type="submit"
+                className="icon-button"
+                aria-label={editingPlayerId ? 'Save player' : 'Add player'}
+                disabled={savingAction === 'player'}
+              >
+                {editingPlayerId ? <Save size={18} /> : <Plus size={18} />}
               </button>
+              {editingPlayerId ? (
+                <button type="button" className="ghost-button" onClick={cancelEditPlayer}>
+                  Cancel
+                </button>
+              ) : null}
             </form>
+            <div className="players-list">
+              {sortedPlayers.map((player) => {
+                const hasGames = playerHasMatches(player.id, data.matches)
+                return (
+                  <div
+                    className={editingPlayerId === player.id ? 'player-row editing' : 'player-row'}
+                    key={player.id}
+                  >
+                    <div>
+                      <strong>{player.name}</strong>
+                      <span>{player.skillLevel.toFixed(1)} skill</span>
+                    </div>
+                    <div className="player-row-actions">
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Edit ${player.name}`}
+                        onClick={() => startEditPlayer(player)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button danger"
+                        aria-label={`Remove ${player.name}`}
+                        disabled={hasGames}
+                        title={
+                          hasGames ? 'Remove all of this player’s games before deleting them.' : undefined
+                        }
+                        onClick={() => requestDeletePlayer(player.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              {sortedPlayers.length === 0 ? (
+                <p className="empty-table">No players yet.</p>
+              ) : null}
+            </div>
           </section>
 
         </div>
@@ -1135,7 +1465,7 @@ function AdminPage({
                                         type="button"
                                         className="icon-button danger"
                                         aria-label="Delete game"
-                                        onClick={() => deleteMatch(match.id)}
+                                        onClick={() => requestDeleteMatch(match.id)}
                                       >
                                         <Trash2 size={16} />
                                       </button>

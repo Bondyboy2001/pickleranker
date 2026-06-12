@@ -93,6 +93,37 @@ export function saveLocalData(data: AppData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+export function exportDataSnapshot(data: AppData) {
+  return JSON.stringify(
+    { players: data.players, matches: data.matches, exportedAt: new Date().toISOString() },
+    null,
+    2,
+  )
+}
+
+export function parseImportedData(raw: string): AppData | { error: string } {
+  try {
+    const parsed = JSON.parse(raw) as Partial<AppData>
+    if (!Array.isArray(parsed.players) || !Array.isArray(parsed.matches)) {
+      return { error: 'File must include players and matches arrays.' }
+    }
+    return mergeWithSeedData({
+      players: parsed.players,
+      matches: sortMatches(parsed.matches),
+    })
+  } catch {
+    return { error: 'Could not read that file. Use a pickleranker JSON export.' }
+  }
+}
+
+export function playerHasMatches(playerId: string, matches: Match[]) {
+  return matches.some(
+    (match) =>
+      match.teamA.includes(playerId) ||
+      match.teamB.includes(playerId),
+  )
+}
+
 export function playerToDb(player: Player): DbPlayer {
   return {
     id: player.id,

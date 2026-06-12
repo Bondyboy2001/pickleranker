@@ -1851,3 +1851,230 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.dev-mode-banner {
+  margin: 0 28px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dev-mode-banner strong {
+  color: var(--text-strong);
+}
+
+.rating-explainer {
+  margin: 18px 28px 0;
+  overflow: hidden;
+}
+
+.rating-explainer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rating-explainer-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rating-explainer-body {
+  padding: 0 18px 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rating-explainer-body ul {
+  margin: 12px 0;
+  padding-left: 20px;
+}
+
+.rating-explainer-body li + li {
+  margin-top: 8px;
+}
+
+.rating-explainer-foot {
+  margin: 0;
+  color: var(--text);
+}
+
+.public-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 28px 24px;
+}
+
+.footer-admin-link {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.footer-admin-link:hover {
+  color: var(--text-strong);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 42%);
+}
+
+.confirm-dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.primary-button.danger-button {
+  background: var(--danger);
+  color: #fff;
+}
+
+.local-admin-tools {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.local-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  margin: 0 18px 18px;
+  overflow: auto;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+.player-row.editing {
+  border-color: var(--accent-strong);
+}
+
+.player-row strong {
+  display: block;
+}
+
+.player-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.player-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.weekly-heading-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.weekly-search {
+  min-width: min(240px, 100%);
+}
+
+.leaderboard-table-wrap {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 680px) {
+  .dev-mode-banner,
+  .rating-explainer {
+    margin-inline: 14px;
+  }
+
+  .public-footer {
+    padding-inline: 14px;
+  }
+
+  .leaderboard-table-wrap .leaderboard-table th:nth-child(1),
+  .leaderboard-table-wrap .leaderboard-table td:nth-child(1),
+  .leaderboard-table-wrap .leaderboard-table th:nth-child(2),
+  .leaderboard-table-wrap .leaderboard-table td:nth-child(2) {
+    position: sticky;
+    z-index: 1;
+    background: var(--surface);
+  }
+
+  .leaderboard-table-wrap .leaderboard-table th:nth-child(1),
+  .leaderboard-table-wrap .leaderboard-table td:nth-child(1) {
+    left: 0;
+  }
+
+  .leaderboard-table-wrap .leaderboard-table th:nth-child(2),
+  .leaderboard-table-wrap .leaderboard-table td:nth-child(2) {
+    left: 42px;
+    box-shadow: 6px 0 10px -8px rgb(15 23 42 / 28%);
+  }
+
+  .weekly-heading-controls {
+    width: 100%;
+  }
+
+  .weekly-search,
+  .week-select {
+    width: 100%;
+  }
+}
