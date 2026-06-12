@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CalendarDays, Check, Flag, Trophy, Users, X } from 'lucide-react'
+import {
+  ArrowRight,
+  CalendarDays,
+  Check,
+  Clock,
+  Flag,
+  Pause,
+  Play,
+  RotateCcw,
+  Trophy,
+  Users,
+  X,
+} from 'lucide-react'
 import { AdminField, FieldInput, FieldInputWrap } from './AdminField'
 import { PlayerSearchAdd } from './PlayerSearchAdd'
 import { formatPlayedOnDate, formatResultsLabel, makeId } from '../lib/data'
@@ -15,6 +27,21 @@ import {
 import type { Match, PlayerStanding } from '../lib/types'
 
 const TOURNAMENT_STORAGE_KEY = 'pickleranker-tournament-v1'
+const DEFAULT_TIMER_MINUTES = 12
+const MIN_TIMER_MINUTES = 1
+const MAX_TIMER_MINUTES = 60
+
+function durationInputToSeconds(value: string) {
+  const minutes = Number(value)
+  if (!Number.isFinite(minutes)) return DEFAULT_TIMER_MINUTES * 60
+  return Math.round(Math.min(MAX_TIMER_MINUTES, Math.max(MIN_TIMER_MINUTES, minutes))) * 60
+}
+
+function formatTimer(seconds: number) {
+  const minutes = Math.floor(seconds / 60)
+  const remainder = seconds % 60
+  return `${minutes}:${String(remainder).padStart(2, '0')}`
+}
 
 function loadStoredTournament(): TournamentState | null {
   if (typeof localStorage === 'undefined') return null
@@ -23,6 +50,11 @@ function loadStoredTournament(): TournamentState | null {
   try {
     const parsed = JSON.parse(stored) as TournamentState
     if (!Array.isArray(parsed.rounds) || parsed.rounds.length === 0) return null
+    const hasOverflowPlayers = parsed.playerIds.length % 4 > 0
+    const hasGlobalSitOuts = parsed.rounds.every((round) =>
+      round.courts.every((court) => court.games.every((game) => Array.isArray(game.sitOutIds))),
+    )
+    if (hasOverflowPlayers && !hasGlobalSitOuts) return null
     return parsed
   } catch {
     return null
@@ -54,6 +86,112 @@ function RoundTab({
   )
 }
 
+function TournamentTimer() {
+  const defaultSeconds = DEFAULT_TIMER_MINUTES * 60
+  const [durationInput, setDurationInput] = useState(String(DEFAULT_TIMER_MINUTES))
+  const [remainingSeconds, setRemainingSeconds] = useState(defaultSeconds)
+  const [isRunning, setIsRunning] = useState(false)
+  const [hasStarted, setHasStarted] = useState(false)
+  const [endsAt, setEndsAt] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!isRunning || !endsAt) return
+    const tick = () => {
+      const nextRemaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
+      setRemainingSeconds(nextRemaining)
+      if (nextRemaining === 0) {
+        setIsRunning(false)
+        setEndsAt(null)
+      }
+    }
+
+    tick()
+    const intervalId = window.setInterval(tick, 250)
+    return () => window.clearInterval(intervalId)
+  }, [endsAt, isRunning])
+
+  function updateDuration(value: string) {
+    if (hasStarted) return
+    setDurationInput(value)
+    if (value.trim() === '') return
+    setRemainingSeconds(durationInputToSeconds(value))
+  }
+
+  function commitDuration() {
+    const seconds = durationInputToSeconds(durationInput)
+    setDurationInput(String(seconds / 60))
+    if (!hasStarted) setRemainingSeconds(seconds)
+  }
+
+  function startTimer() {
+    if (remainingSeconds <= 0) return
+    setHasStarted(true)
+    setIsRunning(true)
+    setEndsAt(Date.now() + remainingSeconds * 1000)
+  }
+
+  function pauseTimer() {
+    if (endsAt) {
+      setRemainingSeconds(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)))
+    }
+    setIsRunning(false)
+    setEndsAt(null)
+  }
+
+  function resetTimer() {
+    const seconds = durationInputToSeconds(durationInput)
+    setIsRunning(false)
+    setHasStarted(false)
+    setEndsAt(null)
+    setRemainingSeconds(seconds)
+  }
+
+  const isTimeUp = hasStarted && remainingSeconds === 0
+
+  return (
+    <section className={`tournament-timer${isRunning ? ' running' : ''}${isTimeUp ? ' done' : ''}`}>
+      <div className="tournament-timer-display">
+        <span className="tournament-timer-icon" aria-hidden>
+          <Clock size={18} />
+        </span>
+        <div>
+          <span className="tournament-timer-label">Round timer</span>
+          <strong>{formatTimer(remainingSeconds)}</strong>
+        </div>
+      </div>
+
+      <div className="tournament-timer-controls">
+        <AdminField label="Minutes">
+          <FieldInput
+            type="number"
+            min={MIN_TIMER_MINUTES}
+            max={MAX_TIMER_MINUTES}
+            step="1"
+            value={durationInput}
+            onChange={(event) => updateDuration(event.target.value)}
+            onBlur={commitDuration}
+            disabled={hasStarted}
+            aria-label="Timer duration in minutes"
+          />
+        </AdminField>
+        <button
+          type="button"
+          className="primary-button tournament-timer-button"
+          onClick={isRunning ? pauseTimer : startTimer}
+          disabled={remainingSeconds <= 0}
+        >
+          {isRunning ? <Pause size={16} /> : <Play size={16} />}
+          {isRunning ? 'Pause' : 'Start'}
+        </button>
+        <button type="button" className="ghost-button tournament-timer-button" onClick={resetTimer}>
+          <RotateCcw size={16} />
+          Reset
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function TournamentRoundView({
   round,
   readOnly,
@@ -70,106 +208,117 @@ function TournamentRoundView({
     value: string,
   ) => void
 }) {
+  const gameCount = Math.max(...round.courts.map((court) => court.games.length))
+  const roundComplete = isRoundComplete(round)
+
   return (
     <>
-      {round.sitOutIds.length > 0 ? (
-        <p className="tournament-sitout-note">
-          <Users size={16} aria-hidden />
-          <span>
-            Sitting out: <strong>{round.sitOutIds.map(nameOf).join(', ')}</strong>
-          </span>
-        </p>
-      ) : null}
-
-      <div className="tournament-court-grid">
-        {round.courts.map((court, courtIndex) => {
-          const ranking = rankCourtPlayers(court)
-          const courtComplete = court.games.every((game) => parseGameScores(game))
+      <div className="tournament-game-list">
+        {Array.from({ length: gameCount }, (_, gameIndex) => {
+          const sitOutIds = round.courts[0]?.games[gameIndex]?.sitOutIds ?? []
+          const scoredCount = round.courts.filter((court) => parseGameScores(court.games[gameIndex])).length
           return (
-            <article className="tournament-court-card" key={court.court}>
-              <header className="tournament-court-head">
-                <span className="tournament-court-badge">Court {court.court}</span>
-                <div className="tournament-court-players">
-                  {court.playerIds.map((playerId) => (
-                    <span className="tournament-court-player" key={playerId}>
-                      {nameOf(playerId)}
-                    </span>
-                  ))}
+            <section className="tournament-game-block" key={gameIndex}>
+              <header className="tournament-game-head">
+                <div>
+                  <span className="tournament-game-kicker">Game {gameIndex + 1}</span>
+                  {sitOutIds.length > 0 ? (
+                    <p>
+                      Sitting: <strong>{sitOutIds.map(nameOf).join(', ')}</strong>
+                    </p>
+                  ) : (
+                    <p>Everyone plays this game.</p>
+                  )}
                 </div>
+                <span className="tournament-game-progress">
+                  {scoredCount}/{round.courts.length} scored
+                </span>
               </header>
 
-              <div className="tournament-games">
-                {court.games.map((game, gameIndex) => (
-                  <div className="tournament-match" key={game.id}>
-                    <span className="tournament-match-label">Game {gameIndex + 1}</span>
-                    <div className="tournament-match-body">
-                      <div className="tournament-match-team home">
-                        <span>{nameOf(game.teamA[0])}</span>
-                        <span>{nameOf(game.teamA[1])}</span>
+              <div className="tournament-game-courts">
+                {round.courts.map((court, courtIndex) => {
+                  const game = court.games[gameIndex]
+                  if (!game) return null
+                  return (
+                    <article className="tournament-match" key={game.id}>
+                      <div className="tournament-match-top">
+                        <span className="tournament-court-badge">Court {court.court}</span>
+                        {parseGameScores(game) ? <span className="tournament-score-status">Done</span> : null}
                       </div>
-                      <div className="tournament-match-scores">
-                        <FieldInputWrap className="tournament-score-input">
-                          <input
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            placeholder="–"
-                            readOnly={readOnly}
-                            aria-label={`Court ${court.court} game ${gameIndex + 1} first team score`}
-                            value={game.scoreA}
-                            onChange={(event) =>
-                              onUpdateScore(courtIndex, gameIndex, 'scoreA', event.target.value)
-                            }
-                          />
-                        </FieldInputWrap>
-                        <span className="tournament-score-vs">vs</span>
-                        <FieldInputWrap className="tournament-score-input">
-                          <input
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            placeholder="–"
-                            readOnly={readOnly}
-                            aria-label={`Court ${court.court} game ${gameIndex + 1} second team score`}
-                            value={game.scoreB}
-                            onChange={(event) =>
-                              onUpdateScore(courtIndex, gameIndex, 'scoreB', event.target.value)
-                            }
-                          />
-                        </FieldInputWrap>
+                      <div className="tournament-match-body">
+                        <div className="tournament-match-team home">
+                          <span>{nameOf(game.teamA[0])}</span>
+                          <span>{nameOf(game.teamA[1])}</span>
+                        </div>
+                        <div className="tournament-match-scores">
+                          <FieldInputWrap className="tournament-score-input">
+                            <input
+                              type="number"
+                              min="0"
+                              inputMode="numeric"
+                              placeholder="–"
+                              readOnly={readOnly}
+                              aria-label={`Court ${court.court} game ${gameIndex + 1} first team score`}
+                              value={game.scoreA}
+                              onChange={(event) =>
+                                onUpdateScore(courtIndex, gameIndex, 'scoreA', event.target.value)
+                              }
+                            />
+                          </FieldInputWrap>
+                          <span className="tournament-score-vs">vs</span>
+                          <FieldInputWrap className="tournament-score-input">
+                            <input
+                              type="number"
+                              min="0"
+                              inputMode="numeric"
+                              placeholder="–"
+                              readOnly={readOnly}
+                              aria-label={`Court ${court.court} game ${gameIndex + 1} second team score`}
+                              value={game.scoreB}
+                              onChange={(event) =>
+                                onUpdateScore(courtIndex, gameIndex, 'scoreB', event.target.value)
+                              }
+                            />
+                          </FieldInputWrap>
+                        </div>
+                        <div className="tournament-match-team away">
+                          <span>{nameOf(game.teamB[0])}</span>
+                          <span>{nameOf(game.teamB[1])}</span>
+                        </div>
                       </div>
-                      <div className="tournament-match-team away">
-                        <span>{nameOf(game.teamB[0])}</span>
-                        <span>{nameOf(game.teamB[1])}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    </article>
+                  )
+                })}
               </div>
-
-              {courtComplete ? (
-                <footer className="tournament-court-results">
-                  <span className="tournament-results-label">Court finish</span>
-                  <div className="tournament-court-standings">
-                    {ranking.map((result, index) => (
-                      <span
-                        key={result.playerId}
-                        className={
-                          index < 2 ? 'tournament-rank moving-up' : 'tournament-rank moving-down'
-                        }
-                      >
-                        {index + 1}. {nameOf(result.playerId)} · {result.wins}W ·{' '}
-                        {result.pointDiff >= 0 ? '+' : ''}
-                        {result.pointDiff}
-                      </span>
-                    ))}
-                  </div>
-                </footer>
-              ) : null}
-            </article>
+            </section>
           )
         })}
       </div>
+
+      {roundComplete ? (
+        <section className="tournament-results-grid" aria-label="Round results">
+          {round.courts.map((court) => {
+            const ranking = rankCourtPlayers(court)
+            return (
+              <article className="tournament-court-results" key={court.court}>
+                <span className="tournament-results-label">Court {court.court} finish</span>
+                <div className="tournament-court-standings">
+                  {ranking.map((result, index) => (
+                    <span
+                      key={result.playerId}
+                      className={index < 2 ? 'tournament-rank moving-up' : 'tournament-rank moving-down'}
+                    >
+                      {index + 1}. {nameOf(result.playerId)} · {result.wins}W ·{' '}
+                      {result.pointDiff >= 0 ? '+' : ''}
+                      {result.pointDiff}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            )
+          })}
+        </section>
+      ) : null}
     </>
   )
 }
@@ -323,8 +472,8 @@ export function TournamentPanel({
             <div>
               <h2>Tournament setup</h2>
               <p>
-                Add players, pick a date, then generate round 1. Top-rated players seed court 1,
-                then court 2, and so on.
+                Add players, set the date, then generate three scheduled games with randomized
+                sit-outs and no repeat partners where possible.
               </p>
             </div>
           </div>
@@ -349,7 +498,7 @@ export function TournamentPanel({
             </span>
             {sitOutCount > 0 ? (
               <span className="tournament-stat-pill muted">
-                {sitOutCount} sit out each round
+                {sitOutCount} random sit-out{sitOutCount === 1 ? '' : 's'} per game
               </span>
             ) : null}
           </div>
@@ -371,7 +520,7 @@ export function TournamentPanel({
             disabled={seededSelection.length < 4}
           >
             <Trophy size={17} />
-            Generate round 1
+            Generate
           </button>
         </div>
       </section>
@@ -382,6 +531,11 @@ export function TournamentPanel({
   const activeRound = tournament.rounds[activeRoundIndex]
   const isCurrentRound = activeRoundIndex === latestRoundIndex
   const roundDone = isRoundComplete(activeRound)
+  const totalGames = activeRound.courts.reduce((total, court) => total + court.games.length, 0)
+  const completedGames = activeRound.courts.reduce(
+    (total, court) => total + court.games.filter((game) => parseGameScores(game)).length,
+    0,
+  )
 
   return (
     <section className="panel tournament-panel tournament-active">
@@ -395,12 +549,18 @@ export function TournamentPanel({
             <Users size={15} aria-hidden />
             {tournament.playerIds.length} players
           </span>
+          <span className="tournament-meta-chip">
+            <Check size={15} aria-hidden />
+            {completedGames}/{totalGames} scores
+          </span>
         </div>
         <button type="button" className="ghost-button tournament-cancel" onClick={cancelTournament}>
           <X size={16} />
           End tournament
         </button>
       </div>
+
+      <TournamentTimer />
 
       <div className="tournament-round-tabs" role="tablist" aria-label="Tournament rounds">
         {tournament.rounds.map((round, index) => (
@@ -414,13 +574,9 @@ export function TournamentPanel({
         ))}
       </div>
 
-      {isCurrentRound ? (
-        <p className="tournament-round-hint">
-          Enter every score for round {activeRound.round}, then save to the leaderboard.
-        </p>
-      ) : (
+      {!isCurrentRound ? (
         <p className="tournament-round-hint saved">Round {activeRound.round} saved — view only.</p>
-      )}
+      ) : null}
 
       <TournamentRoundView
         round={activeRound}
