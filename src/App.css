@@ -226,8 +226,7 @@ td span {
   line-height: 1.45;
 }
 
-.topbar-actions,
-.inline-form {
+.topbar-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -446,8 +445,7 @@ td span {
   background: var(--surface);
 }
 
-.search-control,
-.toolbar-select {
+.search-control {
   display: inline-flex;
   align-items: center;
   gap: 11px;
@@ -463,7 +461,6 @@ td span {
   text-transform: none;
 }
 
-.search-control input,
 .search-control input {
   height: auto;
   padding: 0;
@@ -474,11 +471,6 @@ td span {
 
 .search-control input:focus {
   box-shadow: none;
-}
-
-.toolbar-select {
-  justify-content: flex-start;
-  cursor: default;
 }
 
 .leaderboard-panel,
@@ -914,98 +906,59 @@ tbody tr.expanded-row:hover {
   color: var(--danger);
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 16px 18px 18px;
-}
-
 .match-entry-panel {
   overflow: hidden;
 }
 
-.game-entry-form {
+.game-entry-form,
+.add-player-form,
+.admin-form {
   display: grid;
   gap: 14px;
   padding: 16px 18px 18px;
 }
 
-.game-entry-row,
+.pair-entry-grid,
 .score-inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
-.game-entry-row {
-  grid-template-columns: minmax(220px, 1fr);
-}
-
-.team-entry-grid {
+.pair-entry {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.team-card {
-  display: grid;
-  grid-column: auto;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-alt);
 }
 
-.team-card legend {
-  margin: 0 0 4px;
-  color: var(--text-strong);
+.pair-entry-title {
+  margin: 0;
+  color: var(--muted);
   font-size: 13px;
+  font-weight: 700;
 }
 
-.winner-card {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.loser-card {
-  box-shadow: inset 3px 0 0 var(--danger);
-}
-
-.score-entry {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-alt);
+.add-player-form {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px;
+  align-items: end;
 }
 
 .game-entry-form .primary-button,
-.game-entry-form .form-error {
+.game-entry-form .form-error,
+.add-player-form .form-error {
   grid-column: auto;
 }
 
-label,
-fieldset {
+.admin-field {
   display: grid;
-  gap: 7px;
+  gap: 6px;
   margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
-fieldset {
-  grid-column: span 2;
-  padding: 0;
-  border: 0;
-}
-
-legend {
-  margin-bottom: 8px;
+.admin-field > span {
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
 }
 
 input,
@@ -1092,16 +1045,6 @@ select:focus {
   flex: 0 0 42px;
 }
 
-.inline-form {
-  padding: 16px 18px 18px;
-}
-
-.admin-form {
-  display: grid;
-  gap: 10px;
-  padding: 16px 18px 18px;
-}
-
 .admin-form .primary-button,
 .admin-form .form-error {
   grid-column: auto;
@@ -1117,20 +1060,6 @@ select:focus {
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
-}
-
-.inline-form input {
-  min-width: 0;
-}
-
-.inline-form select {
-  width: 84px;
-  flex: 0 0 84px;
-}
-
-.search-input {
-  width: 190px;
-  flex: 0 0 auto;
 }
 
 .weekly-heading {
@@ -1561,15 +1490,13 @@ select:focus {
   }
 
   .summary-strip,
-  .game-entry-row,
-  .team-entry-grid,
+  .pair-entry-grid,
   .score-inputs,
-  .form-grid,
+  .add-player-form,
   .admin-grid {
     grid-template-columns: 1fr;
   }
 
-  fieldset,
   .primary-button {
     grid-column: span 1;
   }
@@ -1597,15 +1524,6 @@ select:focus {
   gap: 18px;
 }
 
-.tournament-setup-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
 .tournament-setup-summary {
   display: inline-flex;
   align-items: center;
@@ -1621,13 +1539,16 @@ select:focus {
 
 .player-autocomplete {
   position: relative;
-  max-width: 560px;
+  display: grid;
+  gap: 10px;
+  max-width: none;
 }
 
-.autocomplete-input-wrap {
+.field-input-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
@@ -1635,13 +1556,15 @@ select:focus {
   color: var(--muted);
 }
 
-.autocomplete-input-wrap:focus-within {
+.field-input-wrap:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.autocomplete-input-wrap input {
-  flex: 1;
+.field-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  height: auto;
   border: none;
   background: transparent;
   font-size: 15px;
@@ -1649,11 +1572,18 @@ select:focus {
   color: var(--text-strong);
   outline: none;
   padding: 0;
+  box-shadow: none;
 }
 
-.autocomplete-input-wrap input::placeholder {
+.field-input-wrap input::placeholder {
   color: var(--muted);
   font-weight: 600;
+}
+
+.field-input-wrap .icon-button {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
 }
 
 .autocomplete-dropdown {
@@ -1798,15 +1728,12 @@ select:focus {
   text-align: right;
 }
 
-.tournament-game-row input {
-  width: 100%;
-  padding: 8px 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-  color: var(--text-strong);
-  font-size: 15px;
-  font-weight: 700;
+.tournament-score-input {
+  min-height: 40px;
+  padding: 4px 8px;
+}
+
+.tournament-score-input input {
   text-align: center;
 }
 
@@ -1983,45 +1910,6 @@ select:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-.players-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 320px;
-  margin: 0 18px 18px;
-  overflow: auto;
-}
-
-.player-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-alt);
-}
-
-.player-row.editing {
-  border-color: var(--accent-strong);
-}
-
-.player-row strong {
-  display: block;
-}
-
-.player-row span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.player-row-actions {
-  display: inline-flex;
-  gap: 6px;
 }
 
 .weekly-heading-controls {

@@ -116,14 +116,6 @@ export function parseImportedData(raw: string): AppData | { error: string } {
   }
 }
 
-export function playerHasMatches(playerId: string, matches: Match[]) {
-  return matches.some(
-    (match) =>
-      match.teamA.includes(playerId) ||
-      match.teamB.includes(playerId),
-  )
-}
-
 export function playerToDb(player: Player): DbPlayer {
   return {
     id: player.id,

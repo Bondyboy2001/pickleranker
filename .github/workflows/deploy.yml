@@ -39,13 +39,16 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Check Cloudflare credentials
-        if: ${{ env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == '' }}
+      - name: Require Cloudflare credentials
         run: |
-          echo "::notice::Skipping Cloudflare Pages deploy because CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is missing."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Cloudflare deploy skipped — add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as GitHub repo secrets."
+            echo "Without them the live site keeps an old build and Supabase will not connect."
+            echo "See DEPLOY.md section 4 for setup steps."
+            exit 1
+          fi
 
       - name: Deploy to Cloudflare Pages
-        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

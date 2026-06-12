@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Flag, Plus, Search, Trophy, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, Flag, Trophy, X } from 'lucide-react'
+import { AdminField, FieldInput, FieldInputWrap } from './AdminField'
+import { PlayerSearchAdd } from './PlayerSearchAdd'
 import { formatResultsLabel, makeId } from '../lib/data'
 import {
   buildNextRound,
@@ -39,13 +41,6 @@ export function TournamentPanel({
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Autocomplete state
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-  const [highlightIndex, setHighlightIndex] = useState(0)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (typeof localStorage === 'undefined') return
     if (tournament) {
@@ -66,23 +61,9 @@ export function TournamentPanel({
     [selectedIds, standings],
   )
 
-  const availablePlayers = useMemo(
-    () =>
-      standings.filter(
-        (player) =>
-          !selectedIds.includes(player.id) &&
-          player.name.toLowerCase().includes(query.trim().toLowerCase()),
-      ),
-    [standings, selectedIds, query],
-  )
-
   function addPlayer(playerId: string) {
     setFormError('')
-    setQuery('')
     setSelectedIds((current) => (current.includes(playerId) ? current : [...current, playerId]))
-    setOpen(false)
-    setHighlightIndex(0)
-    inputRef.current?.focus()
   }
 
   function removePlayer(playerId: string) {
@@ -164,41 +145,7 @@ export function TournamentPanel({
     setTournament(null)
     setSelectedIds([])
     setFormError('')
-    setQuery('')
-    setOpen(false)
   }
-
-  function handleInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      setOpen(true)
-      setHighlightIndex((i) => Math.min(i + 1, availablePlayers.length - 1))
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      setHighlightIndex((i) => Math.max(i - 1, 0))
-    } else if (event.key === 'Enter') {
-      event.preventDefault()
-      const player = availablePlayers[highlightIndex]
-      if (player) {
-        addPlayer(player.id)
-      }
-    } else if (event.key === 'Escape') {
-      setOpen(false)
-    }
-  }
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!open) return
-    function onClick(event: MouseEvent) {
-      const target = event.target as Node
-      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
 
   if (!tournament) {
     const courtCount = Math.floor(seededSelection.length / 4)
@@ -217,14 +164,13 @@ export function TournamentPanel({
         </div>
 
         <div className="tournament-setup-row">
-          <label>
-            Date
-            <input
+          <AdminField label="Date">
+            <FieldInput
               type="date"
               value={playedOn}
               onChange={(event) => setPlayedOn(event.target.value)}
             />
-          </label>
+          </AdminField>
           <div className="tournament-setup-summary">
             <span>
               {seededSelection.length} selected · {courtCount} court{courtCount === 1 ? '' : 's'}
@@ -233,83 +179,12 @@ export function TournamentPanel({
           </div>
         </div>
 
-        <div className="player-autocomplete">
-          <div className="autocomplete-input-wrap">
-            <Search size={16} />
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Type a player name..."
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setOpen(true)
-                setHighlightIndex(0)
-              }}
-              onFocus={() => setOpen(true)}
-              onKeyDown={handleInputKeyDown}
-              autoComplete="off"
-              aria-autocomplete="list"
-              aria-expanded={open}
-              aria-controls={open ? 'player-suggestions' : undefined}
-              aria-activedescendant={open ? `suggestion-${highlightIndex}` : undefined}
-            />
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Add player"
-              onClick={() => {
-                const player = availablePlayers[0]
-                if (player) addPlayer(player.id)
-              }}
-              disabled={availablePlayers.length === 0}
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          {open && availablePlayers.length > 0 ? (
-            <div ref={listRef} className="autocomplete-dropdown" id="player-suggestions" role="listbox">
-              {availablePlayers.map((player, index) => (
-                <div
-                  key={player.id}
-                  id={`suggestion-${index}`}
-                  className={index === highlightIndex ? 'suggestion-highlight' : ''}
-                  role="option"
-                  aria-selected={index === highlightIndex}
-                  onMouseEnter={() => setHighlightIndex(index)}
-                  onClick={() => addPlayer(player.id)}
-                >
-                  {player.name}
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {open && query.trim() && availablePlayers.length === 0 ? (
-            <div className="autocomplete-dropdown empty">
-              No players match “{query.trim()}”
-            </div>
-          ) : null}
-        </div>
-
-        {selectedIds.length > 0 ? (
-          <div className="selected-player-chips" role="list" aria-label="Selected players">
-            {selectedIds.map((playerId) => (
-              <span key={playerId} className="player-chip" role="listitem">
-                <span>{nameOf(playerId)}</span>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={`Remove ${nameOf(playerId)}`}
-                  onClick={() => removePlayer(playerId)}
-                >
-                  <X size={14} />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <PlayerSearchAdd
+          players={standings}
+          selectedIds={selectedIds}
+          onAdd={addPlayer}
+          onRemove={removePlayer}
+        />
 
         {formError ? <p className="form-error">{formError}</p> : null}
         <div className="form-actions">
@@ -370,25 +245,33 @@ export function TournamentPanel({
                     <span>{nameOf(game.teamA[0])}</span>
                     <span>{nameOf(game.teamA[1])}</span>
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    inputMode="numeric"
-                    placeholder="–"
-                    aria-label={`Court ${court.court} game ${gameIndex + 1} first team score`}
-                    value={game.scoreA}
-                    onChange={(event) => updateScore(courtIndex, gameIndex, 'scoreA', event.target.value)}
-                  />
+                  <FieldInputWrap className="tournament-score-input">
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      placeholder="–"
+                      aria-label={`Court ${court.court} game ${gameIndex + 1} first team score`}
+                      value={game.scoreA}
+                      onChange={(event) =>
+                        updateScore(courtIndex, gameIndex, 'scoreA', event.target.value)
+                      }
+                    />
+                  </FieldInputWrap>
                   <span className="score-divider">v</span>
-                  <input
-                    type="number"
-                    min="0"
-                    inputMode="numeric"
-                    placeholder="–"
-                    aria-label={`Court ${court.court} game ${gameIndex + 1} second team score`}
-                    value={game.scoreB}
-                    onChange={(event) => updateScore(courtIndex, gameIndex, 'scoreB', event.target.value)}
-                  />
+                  <FieldInputWrap className="tournament-score-input">
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      placeholder="–"
+                      aria-label={`Court ${court.court} game ${gameIndex + 1} second team score`}
+                      value={game.scoreB}
+                      onChange={(event) =>
+                        updateScore(courtIndex, gameIndex, 'scoreB', event.target.value)
+                      }
+                    />
+                  </FieldInputWrap>
                   <div className="tournament-team away">
                     <span>{nameOf(game.teamB[0])}</span>
                     <span>{nameOf(game.teamB[1])}</span>

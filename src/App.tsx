@@ -19,8 +19,10 @@ import {
   Upload,
 } from 'lucide-react'
 import './App.css'
+import { AdminField, FieldInput } from './components/AdminField'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { NoticeBanner } from './components/NoticeBanner'
+import { PlayerAutocomplete } from './components/PlayerAutocomplete'
 import { RatingExplainer } from './components/RatingExplainer'
 import { TournamentPanel } from './components/TournamentPanel'
 import {
@@ -35,7 +37,6 @@ import {
   makeId,
   matchToDb,
   parseImportedData,
-  playerHasMatches,
   playerToDb,
   saveLocalData,
 } from './lib/data'
@@ -70,9 +71,7 @@ const ADMIN_USERNAME = 'ben'
 const ADMIN_AUTH_EMAIL = 'ben@pickleranker.local'
 const PUBLIC_REFRESH_MS = 60_000
 
-type ConfirmAction =
-  | { type: 'match'; id: string }
-  | { type: 'player'; id: string; name: string }
+type ConfirmAction = { type: 'match'; id: string }
 
 const emptyMatch: MatchFormState = {
   playedOn: new Date().toISOString().slice(0, 10),
@@ -80,7 +79,7 @@ const emptyMatch: MatchFormState = {
   teamA2: '',
   teamB1: '',
   teamB2: '',
-  scoreA: '11',
+  scoreA: '0',
   scoreB: '0',
 }
 
@@ -123,7 +122,6 @@ function App() {
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [matchError, setMatchError] = useState('')
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
-  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [weeklySearch, setWeeklySearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
@@ -346,37 +344,6 @@ function App() {
 
     setSavingAction('player')
     try {
-      if (editingPlayerId) {
-        const existing = data.players.find((player) => player.id === editingPlayerId)
-        if (!existing) return
-
-        const updated: Player = { ...existing, name, skillLevel }
-
-        if (supabase) {
-          const { error } = await supabase
-            .from('players')
-            .update(playerToDb(updated))
-            .eq('id', editingPlayerId)
-          if (error) {
-            setNotice(error.message)
-            return
-          }
-        }
-
-        applyData(
-          {
-            ...data,
-            players: data.players.map((player) =>
-              player.id === editingPlayerId ? updated : player,
-            ),
-          },
-          `${name} updated.`,
-        )
-        setEditingPlayerId(null)
-        setPlayerForm({ name: '', skillLevel: '3.0' })
-        return
-      }
-
       const player: Player = { id: makeId('p'), name, skillLevel }
 
       if (supabase) {
@@ -389,49 +356,6 @@ function App() {
 
       applyData({ ...data, players: [...data.players, player] }, `${name} added at ${skillLevel.toFixed(1)}.`)
       setPlayerForm({ name: '', skillLevel: '3.0' })
-    } finally {
-      setSavingAction(null)
-    }
-  }
-
-  function startEditPlayer(player: Player) {
-    setEditingPlayerId(player.id)
-    setPlayerForm({ name: player.name, skillLevel: String(player.skillLevel) })
-  }
-
-  function cancelEditPlayer() {
-    setEditingPlayerId(null)
-    setPlayerForm({ name: '', skillLevel: '3.0' })
-  }
-
-  function requestDeletePlayer(playerId: string) {
-    const player = data.players.find((entry) => entry.id === playerId)
-    if (!player) return
-    if (playerHasMatches(playerId, data.matches)) {
-      setNotice(`${player.name} still has saved games and cannot be deleted.`)
-      return
-    }
-    setConfirmAction({ type: 'player', id: playerId, name: player.name })
-  }
-
-  async function deletePlayer(playerId: string) {
-    if (!requireAdmin()) return
-
-    setSavingAction('delete-player')
-    try {
-      if (supabase) {
-        const { error } = await supabase.from('players').delete().eq('id', playerId)
-        if (error) {
-          setNotice(error.message)
-          return
-        }
-      }
-
-      if (editingPlayerId === playerId) cancelEditPlayer()
-      applyData(
-        { ...data, players: data.players.filter((player) => player.id !== playerId) },
-        'Player removed.',
-      )
     } finally {
       setSavingAction(null)
     }
@@ -482,12 +406,31 @@ function App() {
       setMatchError('Scores cannot be negative.')
       return null
     }
-    if (scoreA <= scoreB) {
-      setMatchError('Winner score must be higher than loser score.')
+    if (scoreA === scoreB) {
+      setMatchError('Scores must be different.')
       return null
     }
     setMatchError('')
-    return { playerIds, scoreA, scoreB }
+
+    let winningTeamA: [string, string] = [matchForm.teamA1, matchForm.teamA2]
+    let losingTeamB: [string, string] = [matchForm.teamB1, matchForm.teamB2]
+    let winningScore = scoreA
+    let losingScore = scoreB
+
+    if (scoreB > scoreA) {
+      winningTeamA = [matchForm.teamB1, matchForm.teamB2]
+      losingTeamB = [matchForm.teamA1, matchForm.teamA2]
+      winningScore = scoreB
+      losingScore = scoreA
+    }
+
+    return {
+      playerIds,
+      teamA: winningTeamA,
+      teamB: losingTeamB,
+      scoreA: winningScore,
+      scoreB: losingScore,
+    }
   }
 
   async function saveMatch(event: FormEvent<HTMLFormElement>) {
@@ -502,8 +445,8 @@ function App() {
       id: editingMatchId ?? makeId('m'),
       week: formatResultsLabel(matchForm.playedOn),
       playedOn: matchForm.playedOn,
-      teamA: [matchForm.teamA1, matchForm.teamA2],
-      teamB: [matchForm.teamB1, matchForm.teamB2],
+      teamA: validated.teamA,
+      teamB: validated.teamB,
       scoreA: validated.scoreA,
       scoreB: validated.scoreB,
     }
@@ -589,7 +532,6 @@ function App() {
     const action = confirmAction
     setConfirmAction(null)
     if (action.type === 'match') await deleteMatch(action.id)
-    if (action.type === 'player') await deletePlayer(action.id)
   }
 
   async function saveTournamentRound(newMatches: Match[]) {
@@ -617,20 +559,13 @@ function App() {
     }))
   }
 
-  const confirmDialog =
-    confirmAction?.type === 'match'
-      ? {
-          title: 'Delete this game?',
-          message: 'Ratings will be recalculated for everyone who played in it.',
-          confirmLabel: 'Delete game',
-        }
-      : confirmAction?.type === 'player'
-        ? {
-            title: `Remove ${confirmAction.name}?`,
-            message: 'This only works when the player has no saved games.',
-            confirmLabel: 'Remove player',
-          }
-        : null
+  const confirmDialog = confirmAction
+    ? {
+        title: 'Delete this game?',
+        message: 'Ratings will be recalculated for everyone who played in it.',
+        confirmLabel: 'Delete game',
+      }
+    : null
 
   return (
     <main className="app-shell">
@@ -714,7 +649,6 @@ function App() {
           canEdit={canEdit}
           data={data}
           editingMatchId={editingMatchId}
-          editingPlayerId={editingPlayerId}
           isAdmin={isAdmin}
           isSupabaseConfigured={isSupabaseConfigured}
           matchError={matchError}
@@ -733,14 +667,11 @@ function App() {
           signIn={signIn}
           signOut={signOut}
           addPlayer={addPlayer}
-          cancelEditPlayer={cancelEditPlayer}
           exportLocalBackup={exportLocalBackup}
           importLocalBackup={importLocalBackup}
-          requestDeletePlayer={requestDeletePlayer}
           saveMatch={saveMatch}
           cancelEditMatch={cancelEditMatch}
           startEditMatch={startEditMatch}
-          startEditPlayer={startEditPlayer}
           requestDeleteMatch={requestDeleteMatch}
         />
       ) : (
@@ -1009,7 +940,6 @@ function AdminPage({
   canEdit,
   data,
   editingMatchId,
-  editingPlayerId,
   isAdmin,
   isSupabaseConfigured,
   matchError,
@@ -1028,14 +958,11 @@ function AdminPage({
   signIn,
   signOut,
   addPlayer,
-  cancelEditPlayer,
   exportLocalBackup,
   importLocalBackup,
-  requestDeletePlayer,
   saveMatch,
   cancelEditMatch,
   startEditMatch,
-  startEditPlayer,
   requestDeleteMatch,
 }: {
   authForm: { username: string; password: string }
@@ -1043,7 +970,6 @@ function AdminPage({
   canEdit: boolean
   data: AppData
   editingMatchId: string | null
-  editingPlayerId: string | null
   isAdmin: boolean
   isSupabaseConfigured: boolean
   matchError: string
@@ -1062,23 +988,16 @@ function AdminPage({
   signIn: (event: FormEvent<HTMLFormElement>) => void
   signOut: () => void
   addPlayer: (event: FormEvent<HTMLFormElement>) => void
-  cancelEditPlayer: () => void
   exportLocalBackup: () => void
   importLocalBackup: (file: File) => void
-  requestDeletePlayer: (playerId: string) => void
   saveMatch: (event: FormEvent<HTMLFormElement>) => void
   cancelEditMatch: () => void
   startEditMatch: (match: Match) => void
-  startEditPlayer: (player: Player) => void
   requestDeleteMatch: (matchId: string) => void
 }) {
   const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
   const importInputRef = useRef<HTMLInputElement>(null)
-  const sortedPlayers = useMemo(
-    () => [...data.players].sort((a, b) => a.name.localeCompare(b.name)),
-    [data.players],
-  )
 
   const updateMatchForm = (next: Partial<MatchFormState>) => {
     setMatchForm({ ...matchForm, ...next })
@@ -1113,20 +1032,24 @@ function AdminPage({
             </div>
           ) : (
             <form className="admin-form" onSubmit={signIn}>
-              <input
-                type="text"
-                placeholder="Username"
-                autoComplete="username"
-                value={authForm.username}
-                onChange={(event) => setAuthForm({ ...authForm, username: event.target.value })}
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                autoComplete="current-password"
-                value={authForm.password}
-                onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })}
-              />
+              <AdminField label="Username">
+                <FieldInput
+                  type="text"
+                  placeholder="Username"
+                  autoComplete="username"
+                  value={authForm.username}
+                  onChange={(event) => setAuthForm({ ...authForm, username: event.target.value })}
+                />
+              </AdminField>
+              <AdminField label="Password">
+                <FieldInput
+                  type="password"
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  value={authForm.password}
+                  onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })}
+                />
+              </AdminField>
               {authError ? <p className="form-error">{authError}</p> : null}
               <button type="submit" className="primary-button">
                 <LogIn size={16} />
@@ -1201,80 +1124,73 @@ function AdminPage({
       {canEdit && adminTab === 'games' ? (
         <div className="admin-grid">
           <section className="panel match-entry-panel">
-            <div className="panel-heading match-entry-heading">
+            <div className="panel-heading">
               <div>
                 <h2>{editingMatchId ? 'Edit game' : 'Add weekly game'}</h2>
-                <p>Enter winners first, then losers and the final score.</p>
+                <p>Pick both pairs and enter each side&apos;s score. The higher score wins.</p>
               </div>
             </div>
             <form className="game-entry-form" onSubmit={saveMatch}>
-              <div className="game-entry-row">
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    required
-                    value={matchForm.playedOn}
-                    onChange={(event) => updateMatchForm({ playedOn: event.target.value })}
-                  />
-                </label>
-              </div>
+              <AdminField label="Date">
+                <FieldInput
+                  type="date"
+                  required
+                  value={matchForm.playedOn}
+                  onChange={(event) => updateMatchForm({ playedOn: event.target.value })}
+                />
+              </AdminField>
 
-              <div className="team-entry-grid">
-                <fieldset className="team-card winner-card">
-                  <legend>Winners</legend>
-                  <PlayerSelect
+              <div className="pair-entry-grid">
+                <div className="pair-entry">
+                  <p className="pair-entry-title">Pair 1</p>
+                  <PlayerAutocomplete
                     players={data.players}
                     value={matchForm.teamA1}
                     excludeIds={[matchForm.teamA2, matchForm.teamB1, matchForm.teamB2]}
                     onChange={(value) => updateMatchForm({ teamA1: value })}
                   />
-                  <PlayerSelect
+                  <PlayerAutocomplete
                     players={data.players}
                     value={matchForm.teamA2}
                     excludeIds={[matchForm.teamA1, matchForm.teamB1, matchForm.teamB2]}
                     onChange={(value) => updateMatchForm({ teamA2: value })}
                   />
-                </fieldset>
-                <fieldset className="team-card loser-card">
-                  <legend>Losers</legend>
-                  <PlayerSelect
+                </div>
+                <div className="pair-entry">
+                  <p className="pair-entry-title">Pair 2</p>
+                  <PlayerAutocomplete
                     players={data.players}
                     value={matchForm.teamB1}
                     excludeIds={[matchForm.teamA1, matchForm.teamA2, matchForm.teamB2]}
                     onChange={(value) => updateMatchForm({ teamB1: value })}
                   />
-                  <PlayerSelect
+                  <PlayerAutocomplete
                     players={data.players}
                     value={matchForm.teamB2}
                     excludeIds={[matchForm.teamA1, matchForm.teamA2, matchForm.teamB1]}
                     onChange={(value) => updateMatchForm({ teamB2: value })}
                   />
-                </fieldset>
+                </div>
               </div>
 
-              <section className="score-entry" aria-label="Game score">
-                <div className="score-inputs">
-                  <label>
-                    Winners score
-                    <input
-                      type="number"
-                      min="1"
-                      value={matchForm.scoreA}
-                      onChange={(event) => updateMatchForm({ scoreA: event.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Losers score
-                    <input
-                      type="number"
-                      min="0"
-                      value={matchForm.scoreB}
-                      onChange={(event) => updateMatchForm({ scoreB: event.target.value })}
-                    />
-                  </label>
-                </div>
-              </section>
+              <div className="score-inputs">
+                <AdminField label="Pair 1 score">
+                  <FieldInput
+                    type="number"
+                    min="0"
+                    value={matchForm.scoreA}
+                    onChange={(event) => updateMatchForm({ scoreA: event.target.value })}
+                  />
+                </AdminField>
+                <AdminField label="Pair 2 score">
+                  <FieldInput
+                    type="number"
+                    min="0"
+                    value={matchForm.scoreB}
+                    onChange={(event) => updateMatchForm({ scoreB: event.target.value })}
+                  />
+                </AdminField>
+              </div>
 
               {matchError ? <p className="form-error">{matchError}</p> : null}
               <div className="form-actions">
@@ -1302,83 +1218,40 @@ function AdminPage({
           <section className="panel players-panel">
             <div className="panel-heading">
               <div>
-                <h2>{editingPlayerId ? 'Edit player' : 'Add player'}</h2>
+                <h2>Add player</h2>
                 <p>New players start from their skill level.</p>
               </div>
             </div>
-            <form className="inline-form" onSubmit={addPlayer}>
-              <input
-                placeholder="Player name"
-                value={playerForm.name}
-                onChange={(event) => setPlayerForm({ ...playerForm, name: event.target.value })}
-              />
-              <select
-                value={playerForm.skillLevel}
-                onChange={(event) =>
-                  setPlayerForm({ ...playerForm, skillLevel: event.target.value })
-                }
-              >
-                <option value="2.5">2.5</option>
-                <option value="3.0">3.0</option>
-                <option value="3.5">3.5</option>
-                <option value="4.0">4.0</option>
-                <option value="4.5">4.5</option>
-              </select>
+            <form className="add-player-form" onSubmit={addPlayer}>
+              <AdminField label="Player name">
+                <FieldInput
+                  placeholder="Player name"
+                  value={playerForm.name}
+                  onChange={(event) => setPlayerForm({ ...playerForm, name: event.target.value })}
+                />
+              </AdminField>
+              <AdminField label="Starting rating">
+                <FieldInput
+                  type="number"
+                  placeholder="3.0"
+                  min="0"
+                  step="0.1"
+                  inputMode="decimal"
+                  value={playerForm.skillLevel}
+                  onChange={(event) =>
+                    setPlayerForm({ ...playerForm, skillLevel: event.target.value })
+                  }
+                />
+              </AdminField>
               <button
                 type="submit"
                 className="icon-button"
-                aria-label={editingPlayerId ? 'Save player' : 'Add player'}
+                aria-label="Add player"
                 disabled={savingAction === 'player'}
               >
-                {editingPlayerId ? <Save size={18} /> : <Plus size={18} />}
+                <Plus size={18} />
               </button>
-              {editingPlayerId ? (
-                <button type="button" className="ghost-button" onClick={cancelEditPlayer}>
-                  Cancel
-                </button>
-              ) : null}
             </form>
-            <div className="players-list">
-              {sortedPlayers.map((player) => {
-                const hasGames = playerHasMatches(player.id, data.matches)
-                return (
-                  <div
-                    className={editingPlayerId === player.id ? 'player-row editing' : 'player-row'}
-                    key={player.id}
-                  >
-                    <div>
-                      <strong>{player.name}</strong>
-                      <span>{player.skillLevel.toFixed(1)} skill</span>
-                    </div>
-                    <div className="player-row-actions">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label={`Edit ${player.name}`}
-                        onClick={() => startEditPlayer(player)}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button danger"
-                        aria-label={`Remove ${player.name}`}
-                        disabled={hasGames}
-                        title={
-                          hasGames ? 'Remove all of this player’s games before deleting them.' : undefined
-                        }
-                        onClick={() => requestDeletePlayer(player.id)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-              {sortedPlayers.length === 0 ? (
-                <p className="empty-table">No players yet.</p>
-              ) : null}
-            </div>
           </section>
 
         </div>
@@ -1943,32 +1816,6 @@ function RatingChart({
         <span>Now {currentChartRating.toFixed(3)}</span>
       </div>
     </div>
-  )
-}
-
-function PlayerSelect({
-  players,
-  value,
-  onChange,
-  excludeIds = [],
-}: {
-  players: Player[]
-  value: string
-  onChange: (value: string) => void
-  excludeIds?: string[]
-}) {
-  const options = players
-    .filter((player) => player.id === value || !excludeIds.includes(player.id))
-    .sort((a, b) => a.name.localeCompare(b.name))
-  return (
-    <select value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="">Choose player</option>
-      {options.map((player) => (
-        <option key={player.id} value={player.id}>
-          {player.name}
-        </option>
-      ))}
-    </select>
   )
 }
 

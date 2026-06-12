@@ -5,7 +5,7 @@ This app is built to run as a public website:
 - Public visitors open the leaderboard and recent results.
 - Admins go to `/#/admin`, sign in, and add players or match scores.
 - Supabase stores the shared online data.
-- Vercel or Netlify hosts the website.
+- Cloudflare Pages hosts the website.
 
 ## 1. Create Supabase
 
@@ -80,7 +80,6 @@ Open `http://127.0.0.1:5173/` for the public site and `http://127.0.0.1:5173/#/a
 ## 4. Deploy It
 
 This repo deploys through GitHub Actions to **Cloudflare Pages** (`dlpickle` project).
-A Vercel project is also linked locally if you prefer that host.
 
 ### GitHub Actions (Cloudflare Pages)
 
@@ -91,24 +90,17 @@ Required GitHub repository secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN` (create in Cloudflare → My Profile → API Tokens → Edit Cloudflare Workers template, with **Account / Cloudflare Pages / Edit** permission)
 
-If `CLOUDFLARE_API_TOKEN` is missing, the workflow still builds but **skips upload**, and the live site keeps an old bundle without Supabase configured.
+If `CLOUDFLARE_API_TOKEN` is missing, the deploy workflow fails and the live site will not update.
 
 After adding the token, push to `main` or run the **Deploy website** workflow manually.
 
+You can also deploy from your machine after `npx wrangler login`:
+
+```bash
+npm run deploy
+```
+
 Live URL: `https://dlpickle.pages.dev`
-
-### Vercel (optional)
-
-1. Import the GitHub repo in Vercel.
-2. Framework preset: Vite.
-3. Build command: `npm run build`.
-4. Output directory: `dist`.
-5. Add environment variables:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-6. Redeploy after saving env vars.
-
-Live URL: `https://pickleranker.vercel.app`
 
 ### Enable live refresh
 
