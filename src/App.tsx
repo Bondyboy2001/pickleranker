@@ -23,6 +23,8 @@ import { AdminField, FieldInput } from './components/AdminField'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { NoticeBanner } from './components/NoticeBanner'
 import { PlayerAutocomplete } from './components/PlayerAutocomplete'
+import { RatingChart } from './components/RatingChart'
+import { PlayersPanel } from './components/PlayersPanel'
 import { RatingExplainer } from './components/RatingExplainer'
 import { TournamentPanel } from './components/TournamentPanel'
 import {
@@ -41,13 +43,14 @@ import {
   saveLocalData,
 } from './lib/data'
 import {
-  buildPlayerWeekPoints,
+  buildPlayerRatingWeeks,
   buildStandings,
+  getPlayerStartingRating,
   buildWeekOptions,
   buildWeeklyPlayerGames,
   buildWeeklyStandings,
-  DEFAULT_RATING,
   sortStandings,
+  sortWeeklyStandings,
 } from './lib/standings'
 import { formatRating, roundRating } from './lib/scoring'
 import { supabase } from './lib/supabase'
@@ -61,6 +64,7 @@ import type {
   SortDirection,
   SortKey,
   WeeklyPlayerGame,
+  WeeklySortKey,
   WeeklyStanding,
 } from './lib/types'
 import type { Session } from '@supabase/supabase-js'
@@ -111,10 +115,16 @@ function App() {
     isSupabaseConfigured ? 'loading' : 'idle',
   )
   const [loadError, setLoadError] = useState('')
-  const [activePublicTab, setActivePublicTab] = useState<'overall' | 'weekly'>('overall')
+  const [activePublicTab, setActivePublicTab] = useState<
+    'overall' | 'weekly' | 'players' | 'how-4dr'
+  >('overall')
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const [selectedWeeklyPlayerId, setSelectedWeeklyPlayerId] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: 'rank',
+    direction: 'asc',
+  })
+  const [weeklySort, setWeeklySort] = useState<{ key: WeeklySortKey; direction: SortDirection }>({
     key: 'rank',
     direction: 'asc',
   })
@@ -264,11 +274,15 @@ function App() {
     if (!query) return sortedStandings
     return sortedStandings.filter((player) => player.name.toLowerCase().includes(query))
   }, [search, sortedStandings])
+  const sortedWeeklyStandings = useMemo(
+    () => sortWeeklyStandings(weeklyStandings, weeklySort.key, weeklySort.direction),
+    [weeklyStandings, weeklySort],
+  )
   const filteredWeeklyStandings = useMemo(() => {
     const query = weeklySearch.trim().toLowerCase()
-    if (!query) return weeklyStandings
-    return weeklyStandings.filter((player) => player.name.toLowerCase().includes(query))
-  }, [weeklySearch, weeklyStandings])
+    if (!query) return sortedWeeklyStandings
+    return sortedWeeklyStandings.filter((player) => player.name.toLowerCase().includes(query))
+  }, [weeklySearch, sortedWeeklyStandings])
   const weeklyPlayerGames = useMemo(
     () =>
       selectedWeeklyPlayerId
@@ -559,6 +573,13 @@ function App() {
     }))
   }
 
+  function toggleWeeklySort(key: WeeklySortKey) {
+    setWeeklySort((current) => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
   const confirmDialog = confirmAction
     ? {
         title: 'Delete this game?',
@@ -602,7 +623,7 @@ function App() {
                 className={activePublicTab === 'overall' ? 'active' : ''}
                 onClick={() => setActivePublicTab('overall')}
               >
-                Leaderboard
+                Overall
               </button>
               <button
                 type="button"
@@ -610,6 +631,20 @@ function App() {
                 onClick={() => setActivePublicTab('weekly')}
               >
                 Weekly
+              </button>
+              <button
+                type="button"
+                className={activePublicTab === 'players' ? 'active' : ''}
+                onClick={() => setActivePublicTab('players')}
+              >
+                Players
+              </button>
+              <button
+                type="button"
+                className={activePublicTab === 'how-4dr' ? 'active' : ''}
+                onClick={() => setActivePublicTab('how-4dr')}
+              >
+                How 4DR works
               </button>
             </div>
           ) : null}
@@ -626,7 +661,11 @@ function App() {
             <a className="ghost-link admin-link" href="#/">
               View public site
             </a>
-          ) : null}
+          ) : (
+            <a className="ghost-link admin-link" href="#/admin">
+              Admin
+            </a>
+          )}
         </div>
       </header>
 
@@ -676,41 +715,46 @@ function App() {
         />
       ) : (
         <div className="public-dashboard">
-          <RatingExplainer />
-          <section className="summary-strip" aria-label="League summary">
-            <div className="summary-card">
-              <span className="summary-icon">
-                <Trophy size={28} />
-              </span>
-              <div>
-                <span>Top rated</span>
-                <strong>{standings[0]?.name ?? '-'}</strong>
-                <b>{standings[0] ? formatRating(standings[0].rating) : '0.000'}</b>
+          {activePublicTab === 'how-4dr' ? (
+            <RatingExplainer />
+          ) : (
+            <>
+          {activePublicTab === 'overall' && (
+            <section className="summary-strip" aria-label="League summary">
+              <div className="summary-card">
+                <span className="summary-icon">
+                  <Trophy size={28} />
+                </span>
+                <div>
+                  <span>Top rated</span>
+                  <strong>{standings[0]?.name ?? '-'}</strong>
+                  <b>{standings[0] ? formatRating(standings[0].rating) : '0.000'}</b>
+                </div>
               </div>
-            </div>
-            <div className="summary-card">
-              <span className="summary-icon">
-                <LineChart size={28} />
-              </span>
-              <div>
-                <span>Average 4DR</span>
-                <strong>{averageRating.toFixed(3)}</strong>
-                <small>Across {data.players.length} players</small>
+              <div className="summary-card">
+                <span className="summary-icon">
+                  <LineChart size={28} />
+                </span>
+                <div>
+                  <span>Average 4DR</span>
+                  <strong>{averageRating.toFixed(3)}</strong>
+                  <small>Across {data.players.length} players</small>
+                </div>
               </div>
-            </div>
-            <div className="summary-card">
-              <span className="summary-icon">
-                <CalendarDays size={28} />
-              </span>
-              <div>
-                <span>Last updated</span>
-                <strong>{lastUpdated}</strong>
-                <small>{data.matches.length} saved games</small>
+              <div className="summary-card">
+                <span className="summary-icon">
+                  <CalendarDays size={28} />
+                </span>
+                <div>
+                  <span>Last updated</span>
+                  <strong>{lastUpdated}</strong>
+                  <small>{data.matches.length} saved games</small>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
-          {activePublicTab === 'overall' ? (
+          {activePublicTab === 'overall' && (
             <section className="panel leaderboard-panel dashboard-table-panel">
               <div className="leaderboard-toolbar">
                 <label className="search-control">
@@ -742,7 +786,7 @@ function App() {
                     {filteredStandings.map((player) => {
                       const isSelected = selectedPlayerId === player.id
                       const playerWeeks = isSelected
-                        ? buildPlayerWeekPoints(player.id, summaries, weeklySnapshots)
+                        ? buildPlayerRatingWeeks(player.id, data, 'standing')
                         : []
                       const rank = rankByPlayerId.get(player.id) ?? 0
                       return (
@@ -791,7 +835,11 @@ function App() {
                           {isSelected ? (
                             <tr className="expanded-row">
                               <td colSpan={LEADERBOARD_COLUMN_COUNT}>
-                                <PlayerDetailPanel player={player} weeks={playerWeeks} />
+                                <PlayerDetailPanel
+                                  player={player}
+                                  weeks={playerWeeks}
+                                  startRating={getPlayerStartingRating(player)}
+                                />
                               </td>
                             </tr>
                           ) : null}
@@ -811,50 +859,65 @@ function App() {
                 </table>
               </div>
             </section>
-          ) : (
+          )}
+          {activePublicTab === 'weekly' && (
             <div className="weekly-workspace">
               <section className="panel weekly-panel">
                 <div className="panel-heading weekly-heading">
-                  <div>
-                    <h2>Weekly leaderboard</h2>
-                    <p>Players ranked by 4DR points gained in the selected week.</p>
-                  </div>
-                  <div className="weekly-heading-controls">
-                    <label className="search-control weekly-search">
-                      <Search size={18} />
-                      <input
-                        type="search"
-                        placeholder="Search players..."
-                        value={weeklySearch}
-                        onChange={(event) => setWeeklySearch(event.target.value)}
-                        aria-label="Search weekly players"
-                      />
-                    </label>
-                    <select
-                      className="week-select"
-                      value={activeWeek}
-                      onChange={(event) => {
-                        setSelectedWeek(event.target.value)
-                        setSelectedWeeklyPlayerId(null)
-                      }}
-                      aria-label="Select week"
-                    >
-                      {weekOptions.map((week) => (
-                        <option key={week.key} value={week.key}>
-                          {week.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <label className="search-control weekly-search">
+                    <Search size={18} />
+                    <input
+                      type="search"
+                      placeholder="Search players..."
+                      value={weeklySearch}
+                      onChange={(event) => setWeeklySearch(event.target.value)}
+                      aria-label="Search weekly players"
+                    />
+                  </label>
+                  <select
+                    className="week-select"
+                    value={activeWeek}
+                    onChange={(event) => {
+                      setSelectedWeek(event.target.value)
+                      setSelectedWeeklyPlayerId(null)
+                    }}
+                    aria-label="Select week"
+                  >
+                    {weekOptions.map((week) => (
+                      <option key={week.key} value={week.key}>
+                        {week.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="table-wrap">
                   <table className="weekly-table">
                     <thead>
                       <tr>
-                        <th>Rank</th>
-                        <th>Player</th>
-                        <th>Weekly +/-</th>
-                        <th>Diff</th>
+                        <SortableHeader
+                          label="Rank"
+                          sortKey="rank"
+                          activeSort={weeklySort}
+                          onSort={toggleWeeklySort}
+                        />
+                        <SortableHeader
+                          label="Player"
+                          sortKey="player"
+                          activeSort={weeklySort}
+                          onSort={toggleWeeklySort}
+                        />
+                        <SortableHeader
+                          label="Weekly +/-"
+                          sortKey="weeklyChange"
+                          activeSort={weeklySort}
+                          onSort={toggleWeeklySort}
+                        />
+                        <SortableHeader
+                          label="Diff"
+                          sortKey="recordDiff"
+                          activeSort={weeklySort}
+                          onSort={toggleWeeklySort}
+                        />
                       </tr>
                     </thead>
                     <tbody>
@@ -923,11 +986,15 @@ function App() {
               />
             </div>
           )}
-          <footer className="public-footer">
-            <a className="footer-admin-link" href="#/admin">
-              Admin
-            </a>
-          </footer>
+          {activePublicTab === 'players' && (
+            <PlayersPanel
+              data={data}
+              standings={standings}
+              rankByPlayerId={rankByPlayerId}
+            />
+          )}
+            </>
+          )}
         </div>
       )}
     </main>
@@ -1004,21 +1071,21 @@ function AdminPage({
     setMatchError('')
   }
 
+  const loginStatus = !isSupabaseConfigured
+    ? 'Development mode — scores save only in this browser until Supabase is configured.'
+    : session
+      ? isAdmin
+        ? 'Signed in as admin. Updates save online.'
+        : 'Signed in, but this account is not listed as an admin.'
+      : ''
+
   return (
     <section className="admin-page">
       <section className="panel login-panel">
         <div className="panel-heading">
           <div>
             <h2>Admin Login</h2>
-            <p>
-              {isSupabaseConfigured
-                ? session
-                  ? isAdmin
-                    ? 'Signed in as admin. Updates save online.'
-                    : 'Signed in, but this account is not listed as an admin.'
-                  : 'Sign in with username ben to update games and players.'
-                : 'Development mode — scores save only in this browser until Supabase is configured.'}
-            </p>
+            {loginStatus ? <p>{loginStatus}</p> : null}
           </div>
         </div>
         {isSupabaseConfigured ? (
@@ -1620,16 +1687,16 @@ function GameTeam({
   )
 }
 
-function SortableHeader({
+function SortableHeader<T extends string>({
   label,
   sortKey,
   activeSort,
   onSort,
 }: {
   label: string
-  sortKey: SortKey
-  activeSort: { key: SortKey; direction: SortDirection }
-  onSort: (key: SortKey) => void
+  sortKey: T
+  activeSort: { key: T; direction: SortDirection }
+  onSort: (key: T) => void
 }) {
   const isActive = activeSort.key === sortKey
   return (
@@ -1652,11 +1719,13 @@ function SortableHeader({
 function PlayerDetailPanel({
   player,
   weeks,
+  startRating,
 }: {
   player: PlayerStanding
   weeks: PlayerWeekPoint[]
+  startRating: number
 }) {
-  const latestWeek = weeks.at(-1)
+  const totalChange = roundRating(player.rating - startRating)
   const bestWeek = weeks.reduce<PlayerWeekPoint | null>(
     (best, week) => (!best || week.change > best.change ? week : best),
     null,
@@ -1665,25 +1734,18 @@ function PlayerDetailPanel({
 
   return (
     <section className="panel player-panel">
-      <div className="player-panel-head">
-        <div>
-          <span className="eyebrow">Selected player</span>
-          <h2>{player.name}</h2>
-          <p>
-            {player.wins}W – {player.losses}L across {player.games} games
-          </p>
-        </div>
-        <strong>{formatRating(player.rating)}</strong>
-      </div>
-
-      <RatingChart weeks={weeks} currentRating={player.rating} />
+      <RatingChart
+        weeks={weeks}
+        currentRating={player.rating}
+        startRating={startRating}
+      />
 
       <div className="player-metrics">
         <div>
           <span>Total change</span>
           <strong>
-            {latestWeek && latestWeek.cumulative >= 0 ? '+' : ''}
-            {latestWeek ? latestWeek.cumulative.toFixed(3) : '0.000'}
+            {totalChange >= 0 ? '+' : ''}
+            {totalChange.toFixed(3)}
           </strong>
         </div>
         <div>
@@ -1714,108 +1776,6 @@ function PlayerDetailPanel({
         ))}
       </div>
     </section>
-  )
-}
-
-function formatWeekLabel(label: string) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const m = label.match(/(\d{1,2})-(\d{2})-\d{4}/)
-  if (!m) return label.slice(0, 6)
-  return `${parseInt(m[1])} ${months[parseInt(m[2]) - 1]}`
-}
-
-function RatingChart({
-  weeks,
-  currentRating,
-}: {
-  weeks: PlayerWeekPoint[]
-  currentRating: number
-}) {
-  if (weeks.length === 0) {
-    return <div className="empty-chart">No sessions logged yet.</div>
-  }
-
-  const W = 340
-  const H = 178
-  const PX = 10
-  const PT = 14
-  const PB = 28
-  const chartW = W - PX * 2
-  const chartH = H - PT - PB
-
-  const ratings = [
-    DEFAULT_RATING,
-    ...weeks.map((week) => roundRating(DEFAULT_RATING + week.cumulative)),
-  ]
-  const currentChartRating = ratings.at(-1) ?? currentRating
-  const n = ratings.length
-
-  const minR = Math.min(...ratings)
-  const maxR = Math.max(...ratings)
-  const range = maxR - minR || 0.05
-  const pad = range * 0.12
-
-  const px = (i: number) => PX + (n === 1 ? chartW / 2 : (i / (n - 1)) * chartW)
-  const py = (r: number) => PT + chartH - ((r - (minR - pad)) / (range + pad * 2)) * chartH
-
-  const pts = ratings.map((r, i) => ({ x: px(i), y: py(r), r }))
-  const linePath = pts
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(' ')
-  const floorY = py(minR - pad)
-  const areaPath = `${linePath} L${pts.at(-1)!.x.toFixed(1)},${floorY.toFixed(1)} L${pts[0].x.toFixed(1)},${floorY.toFixed(1)} Z`
-  const baselineY = py(DEFAULT_RATING)
-
-  const labelSet = new Set<number>([0])
-  const step = Math.max(3, Math.ceil(weeks.length / 4))
-  for (let i = step; i < weeks.length; i += step) labelSet.add(i + 1)
-  labelSet.add(n - 1)
-
-  return (
-    <div className="chart-card">
-      <div className="chart-title">
-        <span>4DR rating over time</span>
-        <strong>{weeks.length} sessions</strong>
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="4DR rating over time">
-        <defs>
-          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#108953" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#108953" stopOpacity="0.01" />
-          </linearGradient>
-        </defs>
-        <line x1={PX} x2={W - PX} y1={baselineY} y2={baselineY} className="chart-zero" />
-        <path d={areaPath} fill="url(#chartFill)" />
-        <path d={linePath} className="chart-line" />
-        {pts.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={i === 0 ? 3 : 3.8}
-            className={
-              i === 0
-                ? 'chart-dot-start'
-                : (weeks[i - 1]?.change ?? 0) >= 0
-                  ? 'chart-dot positive'
-                  : 'chart-dot negative'
-            }
-          />
-        ))}
-        {[...labelSet].map((i) => {
-          const lbl = i === 0 ? 'Start' : formatWeekLabel(weeks[i - 1]?.label ?? '')
-          return (
-            <text key={i} x={px(i).toFixed(1)} y={H - 6} className="chart-label" textAnchor="middle">
-              {lbl}
-            </text>
-          )
-        })}
-      </svg>
-      <div className="chart-scale">
-        <span>Start {DEFAULT_RATING.toFixed(3)}</span>
-        <span>Now {currentChartRating.toFixed(3)}</span>
-      </div>
-    </div>
   )
 }
 

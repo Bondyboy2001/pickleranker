@@ -1,0 +1,16 @@
+---
+description: Publish to Cloudflare Pages after code changes
+alwaysApply: true
+---
+
+# Deploy after changes
+
+After making any code change to this project, run:
+
+```bash
+npm run deploy -- --commit-dirty=true
+```
+
+Live site: https://dlpickle.pages.dev
+
+Do this before finishing the task. If deploy fails, fix the issue and retry.

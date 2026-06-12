@@ -13,18 +13,6 @@ This app is built to run as a public website:
 2. Open SQL Editor.
 3. Run `supabase/schema.sql`.
 
-If you already deployed an older schema with `imported_*` columns, you can drop them:
-
-```sql
-alter table public.players
-  drop column if exists imported_rating,
-  drop column if exists imported_rank,
-  drop column if exists imported_movement;
-
-alter table public.matches
-  drop column if exists imported;
-```
-
 ## 2. Create The Admin Login
 
 The app signs in with username `ben`, which maps to this auth email in code:
@@ -79,28 +67,24 @@ Open `http://127.0.0.1:5173/` for the public site and `http://127.0.0.1:5173/#/a
 
 ## 4. Deploy It
 
-This repo deploys through GitHub Actions to **Cloudflare Pages** (`dlpickle` project).
+Deploy from your machine to **Cloudflare Pages** (`dlpickle` project).
 
-### GitHub Actions (Cloudflare Pages)
+1. Put your Supabase values in `.env.local` (same as local dev).
+2. Log in to Cloudflare once:
 
-Required GitHub repository secrets:
+```bash
+npx wrangler login
+```
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` (create in Cloudflare → My Profile → API Tokens → Edit Cloudflare Workers template, with **Account / Cloudflare Pages / Edit** permission)
-
-If `CLOUDFLARE_API_TOKEN` is missing, the deploy workflow fails and the live site will not update.
-
-After adding the token, push to `main` or run the **Deploy website** workflow manually.
-
-You can also deploy from your machine after `npx wrangler login`:
+3. Build and publish:
 
 ```bash
 npm run deploy
 ```
 
 Live URL: `https://dlpickle.pages.dev`
+
+Run `npm run deploy` again whenever you want to push changes live.
 
 ### Enable live refresh
 

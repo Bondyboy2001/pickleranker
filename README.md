@@ -41,13 +41,14 @@ See [DEPLOY.md](./DEPLOY.md) for the full website setup:
 2. Run `supabase/schema.sql`.
 3. Create an auth user for the admin (`ben@pickleranker.local`).
 4. Add that user to `public.admin_users`.
-5. Add GitHub secrets and deploy to Cloudflare Pages (`CLOUDFLARE_API_TOKEN` is required or the live site will not update).
+5. Run `npm run deploy` to publish to Cloudflare Pages.
 
 ## Scripts
 
 ```bash
 npm run dev
 npm run build
+npm run deploy
 npm run lint
 npm run verify:scoring
 ```

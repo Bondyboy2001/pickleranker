@@ -60,8 +60,6 @@ function mergeWithSeedData(data: AppData): AppData {
       name: seededPlayer.name,
       skillLevel: seededPlayer.skillLevel,
       importedRating: seededPlayer.importedRating,
-      importedRank: seededPlayer.importedRank,
-      importedMovement: seededPlayer.importedMovement,
     })
   })
 
@@ -129,15 +127,6 @@ function dbToPlayer(player: DbPlayer): Player {
     id: player.id,
     name: player.name,
     skillLevel: Number(player.skill_level),
-    importedRating:
-      player.imported_rating === null || player.imported_rating === undefined
-        ? undefined
-        : Number(player.imported_rating),
-    importedRank:
-      player.imported_rank === null || player.imported_rank === undefined
-        ? undefined
-        : Number(player.imported_rank),
-    importedMovement: player.imported_movement ?? undefined,
   }
 }
 
@@ -164,7 +153,6 @@ function dbToMatch(match: DbMatch): Match {
     teamB: [match.team_b1, match.team_b2],
     scoreA: match.score_a,
     scoreB: match.score_b,
-    imported: Boolean(match.imported),
   }
 }
 

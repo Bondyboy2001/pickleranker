@@ -3,8 +3,6 @@ export type Player = {
   name: string
   skillLevel: number
   importedRating?: number
-  importedRank?: number
-  importedMovement?: string
 }
 
 export type Match = {
@@ -101,15 +99,13 @@ export type WeeklyPlayerGame = {
 }
 
 export type SortKey = 'rank' | 'player' | 'rating' | 'record' | 'games' | 'wins' | 'losses' | 'pointDiff'
+export type WeeklySortKey = 'rank' | 'player' | 'weeklyChange' | 'recordDiff'
 export type SortDirection = 'asc' | 'desc'
 
 export type DbPlayer = {
   id: string
   name: string
   skill_level: number
-  imported_rating?: number | null
-  imported_rank?: number | null
-  imported_movement?: string | null
 }
 
 export type DbMatch = {
@@ -122,7 +118,6 @@ export type DbMatch = {
   team_b2: string
   score_a: number
   score_b: number
-  imported?: boolean
 }
 
 export type MatchFormState = {
