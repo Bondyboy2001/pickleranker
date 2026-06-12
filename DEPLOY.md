@@ -3,7 +3,7 @@
 This app is built to run as a public website:
 
 - Public visitors open the leaderboard and recent results.
-- Admins go to `/#/admin`, sign in, and add players or match scores.
+- Admins go to `/#/manage` (or `/#/admin`), sign in, and add players or match scores.
 - Supabase stores the shared online data.
 - Cloudflare Pages hosts the website.
 
@@ -12,6 +12,7 @@ This app is built to run as a public website:
 1. Go to Supabase and create a new project.
 2. Open SQL Editor.
 3. Run `supabase/schema.sql`.
+4. If the project already exists, also run `supabase/migration-2026-06-12.sql` for match edit timestamps and shared tournament drafts.
 
 ## 2. Create The Admin Login
 
@@ -63,7 +64,7 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/` for the public site and `http://127.0.0.1:5173/#/admin` for the admin page.
+Open `http://127.0.0.1:5173/` for the public site and `http://127.0.0.1:5173/#/manage` for the admin page.
 
 ## 4. Deploy It
 
@@ -93,7 +94,7 @@ In Supabase → Database → Publications, ensure `supabase_realtime` includes t
 ## 5. Use The Website
 
 - Share the deployed URL with anyone who should view the leaderboard.
-- Use `https://your-site.com/#/admin` to sign in as admin.
+- Use `https://your-site.com/#/manage` to sign in as admin.
 - Add players, then add weekly games from the admin page.
 - Edit or delete recent games from the admin page if needed.
 - The leaderboard recalculates from saved games automatically.

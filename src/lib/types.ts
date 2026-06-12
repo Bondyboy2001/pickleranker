@@ -14,6 +14,7 @@ export type Match = {
   scoreA: number
   scoreB: number
   imported?: boolean
+  updatedAt?: string
 }
 
 export type WeeklySnapshot = {
@@ -119,6 +120,7 @@ export type DbMatch = {
   team_b2: string
   score_a: number
   score_b: number
+  updated_at?: string
 }
 
 export type MatchFormState = {

@@ -4,12 +4,24 @@ import { Search } from 'lucide-react'
 import { FieldInputWrap } from './AdminField'
 import type { Player } from '../lib/types'
 
+type AutocompletePlayer = Pick<Player, 'id' | 'name'>
+
 type PlayerAutocompleteProps = {
-  players: Player[]
+  players: AutocompletePlayer[]
   value: string
   onChange: (playerId: string) => void
   excludeIds?: string[]
   placeholder?: string
+}
+
+type PlayerSearchAutocompleteProps = {
+  players: AutocompletePlayer[]
+  value: string
+  onChange: (query: string) => void
+  onSelect?: (playerId: string) => void
+  placeholder?: string
+  ariaLabel?: string
+  className?: string
 }
 
 export function PlayerAutocomplete({
@@ -59,7 +71,7 @@ export function PlayerAutocomplete({
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       setOpen(true)
-      setHighlightIndex((index) => Math.min(index + 1, suggestions.length - 1))
+      setHighlightIndex((index) => Math.min(index + 1, Math.max(suggestions.length - 1, 0)))
       return
     }
     if (event.key === 'ArrowUp') {
@@ -135,6 +147,123 @@ export function PlayerAutocomplete({
 
       {open && query.trim() && suggestions.length === 0 ? (
         <div className="autocomplete-dropdown empty">No players match “{query.trim()}”</div>
+      ) : null}
+    </div>
+  )
+}
+
+export function PlayerSearchAutocomplete({
+  players,
+  value,
+  onChange,
+  onSelect,
+  placeholder = 'Search players...',
+  ariaLabel = 'Search players',
+  className = '',
+}: PlayerSearchAutocompleteProps) {
+  const listId = useId()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(0)
+
+  const suggestions = useMemo(() => {
+    const normalizedQuery = value.trim().toLowerCase()
+    return players
+      .filter(
+        (player) =>
+          normalizedQuery === '' || player.name.toLowerCase().includes(normalizedQuery),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [players, value])
+
+  function selectPlayer(player: AutocompletePlayer) {
+    onChange(player.name)
+    onSelect?.(player.id)
+    setOpen(false)
+    setHighlightIndex(0)
+  }
+
+  function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setOpen(true)
+      setHighlightIndex((index) => Math.min(index + 1, Math.max(suggestions.length - 1, 0)))
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlightIndex((index) => Math.max(index - 1, 0))
+      return
+    }
+    if (event.key === 'Enter') {
+      const player = suggestions[highlightIndex]
+      if (!player) return
+      event.preventDefault()
+      selectPlayer(player)
+      return
+    }
+    if (event.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return
+    function onClick(event: MouseEvent) {
+      const target = event.target as Node
+      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  return (
+    <div className={`player-autocomplete ${className}`.trim()}>
+      <FieldInputWrap icon={<Search size={16} />}>
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value)
+            setOpen(true)
+            setHighlightIndex(0)
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleInputKeyDown}
+          autoComplete="off"
+          aria-label={ariaLabel}
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-activedescendant={open ? `${listId}-option-${highlightIndex}` : undefined}
+        />
+      </FieldInputWrap>
+
+      {open && suggestions.length > 0 ? (
+        <div ref={listRef} className="autocomplete-dropdown" id={listId} role="listbox">
+          {suggestions.map((player, index) => (
+            <div
+              key={player.id}
+              id={`${listId}-option-${index}`}
+              className={index === highlightIndex ? 'suggestion-highlight' : ''}
+              role="option"
+              aria-selected={index === highlightIndex}
+              onMouseEnter={() => setHighlightIndex(index)}
+              onClick={() => selectPlayer(player)}
+            >
+              {player.name}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {open && value.trim() && suggestions.length === 0 ? (
+        <div className="autocomplete-dropdown empty">No players match “{value.trim()}”</div>
       ) : null}
     </div>
   )

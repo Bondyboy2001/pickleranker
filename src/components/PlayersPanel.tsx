@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
-import { PlayerAutocomplete } from './PlayerAutocomplete'
+import { PlayerAutocomplete, PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { RatingChart } from './RatingChart'
 import {
   buildPlayerRatingWeeks,
@@ -24,6 +23,7 @@ type HeadToHeadStats = {
   pointsA: number
   pointsB: number
   latest: Match | null
+  sharedMatches: Match[]
 }
 
 type HistorySortKey = 'week' | 'games' | 'record' | 'points' | 'change'
@@ -158,6 +158,7 @@ function buildHeadToHeadStats(playerAId: string, playerBId: string, matches: Mat
     pointsA: 0,
     pointsB: 0,
     latest: null,
+    sharedMatches: [],
   }
 
   matches.forEach((match) => {
@@ -174,9 +175,11 @@ function buildHeadToHeadStats(playerAId: string, playerBId: string, matches: Mat
     stats.winsB += playerAWon ? 0 : 1
     stats.pointsA += playerAPoints
     stats.pointsB += playerBPoints
+    stats.sharedMatches.push(match)
     if (!stats.latest || match.playedOn > stats.latest.playedOn) stats.latest = match
   })
 
+  stats.sharedMatches.sort((a, b) => b.playedOn.localeCompare(a.playedOn) || b.id.localeCompare(a.id))
   return stats
 }
 
@@ -200,15 +203,24 @@ function buildProfileStats(player: PlayerStanding, weeks: PlayerWeekPoint[]) {
   }
 }
 
+function countLeagueWeeks(data: AppData) {
+  const weeks = new Set<string>()
+  data.weeklySnapshots?.forEach((snapshot) => weeks.add(snapshot.key))
+  data.matches.forEach((match) => weeks.add(match.playedOn))
+  return weeks.size
+}
+
 function PlayerProfileDetail({
   data,
   player,
   rank,
+  totalWeeks,
   weeks,
 }: {
   data: AppData
   player: PlayerStanding
   rank: number
+  totalWeeks: number
   weeks: PlayerWeekPoint[]
 }) {
   const stats = useMemo(() => buildProfileStats(player, weeks), [player, weeks])
@@ -264,7 +276,9 @@ function PlayerProfileDetail({
         </div>
         <div>
           <span>Weeks played</span>
-          <strong>{stats.weeksPlayed}</strong>
+          <strong>
+            {stats.weeksPlayed}/{totalWeeks}
+          </strong>
         </div>
         <div>
           <span>Foe</span>
@@ -504,6 +518,24 @@ function HeadToHeadPanel({
               {stats.latest ? <small>{stats.latest.week.replace(/^Results\s+/, '')}</small> : null}
             </div>
           </div>
+
+          {stats.sharedMatches.length > 0 ? (
+            <ul className="head-to-head-games">
+              {stats.sharedMatches.map((match) => {
+                const scoreA = getPlayerTeam(match, playerA.id) === 'A' ? match.scoreA : match.scoreB
+                const scoreB = getPlayerTeam(match, playerB.id) === 'A' ? match.scoreA : match.scoreB
+                const playerAWon = scoreA > scoreB
+                return (
+                  <li key={match.id}>
+                    <span>{match.week.replace(/^Results\s+/, '')}</span>
+                    <strong className={playerAWon ? 'positive' : 'negative'}>
+                      {scoreA}-{scoreB}
+                    </strong>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : null}
         </div>
       ) : (
         <p className="head-to-head-empty">Select two players.</p>
@@ -516,15 +548,16 @@ export function PlayersPanel({
   data,
   standings,
   rankByPlayerId,
+  selectedPlayerId,
+  onSelectPlayer,
 }: {
   data: AppData
   standings: PlayerStanding[]
   rankByPlayerId: Map<string, number>
+  selectedPlayerId: string | null
+  onSelectPlayer: (playerId: string) => void
 }) {
   const [search, setSearch] = useState('')
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(
-    () => standings[0]?.id ?? null,
-  )
 
   const filteredPlayers = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -541,6 +574,9 @@ export function PlayersPanel({
     () => (selectedPlayer ? buildPlayerRatingWeeks(selectedPlayer.id, data, 'fromDefault') : []),
     [selectedPlayer, data],
   )
+  const totalWeeks = useMemo(() => countLeagueWeeks(data), [data])
+
+  const searchPlayers = standings.map((player) => ({ id: player.id, name: player.name }))
 
   return (
     <div className="players-workspace">
@@ -548,16 +584,15 @@ export function PlayersPanel({
         <HeadToHeadPanel data={data} standings={standings} />
         <section className="panel players-list-panel">
           <div className="panel-heading players-heading">
-            <label className="search-control players-search">
-              <Search size={18} />
-              <input
-                type="search"
-                placeholder="Search players..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                aria-label="Search players"
-              />
-            </label>
+            <PlayerSearchAutocomplete
+              players={searchPlayers}
+              value={search}
+              onChange={setSearch}
+              onSelect={onSelectPlayer}
+              placeholder="Search players..."
+              ariaLabel="Search players"
+              className="players-search"
+            />
           </div>
           <div className="players-list">
             {filteredPlayers.map((player) => {
@@ -568,7 +603,7 @@ export function PlayersPanel({
                   key={player.id}
                   type="button"
                   className={`players-list-item${isSelected ? ' selected' : ''}`}
-                  onClick={() => setSelectedPlayerId(player.id)}
+                  onClick={() => onSelectPlayer(player.id)}
                 >
                   <span
                     className={`players-list-rank rank-pos-${rank <= 3 ? rank : 'other'}`}
@@ -605,6 +640,7 @@ export function PlayersPanel({
           data={data}
           player={selectedPlayer}
           rank={rankByPlayerId.get(selectedPlayer.id) ?? 0}
+          totalWeeks={totalWeeks}
           weeks={selectedWeeks}
         />
       ) : (

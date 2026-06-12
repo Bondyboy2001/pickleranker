@@ -5,7 +5,7 @@ pickleranker is a public pickleball ranking website using 4DR scoring.
 The app has two views:
 
 - Public leaderboard: `/#/`
-- Admin score entry: `/#/admin`
+- Admin score entry: `/#/manage` (also `/#/admin`)
 
 Admins sign in with Supabase email/password auth. Public visitors do not need an account.
 
@@ -28,7 +28,7 @@ Without Supabase env vars, the app runs in local-only mode using browser storage
 
 ## Admin screen (easiest way to enter scores)
 
-Open `/#/admin` in the app. No extra admin app is needed.
+Open `/#/manage` in the app. No extra admin app is needed.
 
 - **Local only (simplest):** run `npm run dev`, open `http://127.0.0.1:5173/#/admin`. Scores save in this browser only — no Supabase or hosting required.
 - **Shared public website:** use Supabase for the database and Cloudflare Pages for hosting.

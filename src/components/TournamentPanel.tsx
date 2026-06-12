@@ -15,6 +15,7 @@ import {
 import { AdminField, FieldInput, FieldInputWrap } from './AdminField'
 import { PlayerSearchAdd } from './PlayerSearchAdd'
 import { formatPlayedOnDate, formatResultsLabel, makeId } from '../lib/data'
+import { loadRemoteTournament, saveRemoteTournament } from '../lib/tournamentStorage'
 import {
   buildNextRound,
   createTournament,
@@ -26,7 +27,6 @@ import {
 } from '../lib/tournament'
 import type { Match, PlayerStanding } from '../lib/types'
 
-const TOURNAMENT_STORAGE_KEY = 'pickleranker-tournament-v1'
 const DEFAULT_TIMER_MINUTES = 12
 const MIN_TIMER_MINUTES = 1
 const MAX_TIMER_MINUTES = 60
@@ -41,24 +41,6 @@ function formatTimer(seconds: number) {
   const minutes = Math.floor(seconds / 60)
   const remainder = seconds % 60
   return `${minutes}:${String(remainder).padStart(2, '0')}`
-}
-
-function loadStoredTournament(): TournamentState | null {
-  if (typeof localStorage === 'undefined') return null
-  const stored = localStorage.getItem(TOURNAMENT_STORAGE_KEY)
-  if (!stored) return null
-  try {
-    const parsed = JSON.parse(stored) as TournamentState
-    if (!Array.isArray(parsed.rounds) || parsed.rounds.length === 0) return null
-    const hasOverflowPlayers = parsed.playerIds.length % 4 > 0
-    const hasGlobalSitOuts = parsed.rounds.every((round) =>
-      round.courts.every((court) => court.games.every((game) => Array.isArray(game.sitOutIds))),
-    )
-    if (hasOverflowPlayers && !hasGlobalSitOuts) return null
-    return parsed
-  } catch {
-    return null
-  }
 }
 
 function RoundTab({
@@ -330,24 +312,33 @@ export function TournamentPanel({
   standings: PlayerStanding[]
   saveRoundMatches: (matches: Match[]) => Promise<boolean>
 }) {
-  const initialTournament = useMemo(() => loadStoredTournament(), [])
-  const [tournament, setTournament] = useState<TournamentState | null>(initialTournament)
+  const [tournament, setTournament] = useState<TournamentState | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [playedOn, setPlayedOn] = useState(() => new Date().toISOString().slice(0, 10))
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [activeRoundIndex, setActiveRoundIndex] = useState(() =>
-    initialTournament ? initialTournament.rounds.length - 1 : 0,
-  )
+  const [activeRoundIndex, setActiveRoundIndex] = useState(0)
+  const [tournamentLoaded, setTournamentLoaded] = useState(false)
 
   useEffect(() => {
-    if (typeof localStorage === 'undefined') return
-    if (tournament) {
-      localStorage.setItem(TOURNAMENT_STORAGE_KEY, JSON.stringify(tournament))
-    } else {
-      localStorage.removeItem(TOURNAMENT_STORAGE_KEY)
+    let cancelled = false
+    void loadRemoteTournament().then((stored) => {
+      if (cancelled) return
+      if (stored) {
+        setTournament(stored)
+        setActiveRoundIndex(stored.rounds.length - 1)
+      }
+      setTournamentLoaded(true)
+    })
+    return () => {
+      cancelled = true
     }
-  }, [tournament])
+  }, [])
+
+  useEffect(() => {
+    if (!tournamentLoaded) return
+    void saveRemoteTournament(tournament)
+  }, [tournament, tournamentLoaded])
 
   const playerNameById = useMemo(
     () => new Map(standings.map((player) => [player.id, player.name])),
@@ -376,6 +367,7 @@ export function TournamentPanel({
     }
     setFormError('')
     setActiveRoundIndex(0)
+    setTournamentLoaded(true)
     setTournament(createTournament(seededSelection, playedOn))
   }
 
@@ -471,10 +463,6 @@ export function TournamentPanel({
             </span>
             <div>
               <h2>Tournament setup</h2>
-              <p>
-                Add players, set the date, then generate three scheduled games with randomized
-                sit-outs and no repeat partners where possible.
-              </p>
             </div>
           </div>
         </div>

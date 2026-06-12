@@ -16,6 +16,7 @@ create table if not exists public.matches (
   score_a integer not null check (score_a >= 0),
   score_b integer not null check (score_b >= 0),
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   check (score_a <> score_b),
   check (team_a1 <> team_a2),
   check (team_a1 <> team_b1),
@@ -29,6 +30,12 @@ create table if not exists public.admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.tournament_drafts (
+  id text primary key default 'default',
+  data jsonb,
+  updated_at timestamptz not null default now()
 );
 
 create or replace function public.is_admin()
@@ -55,6 +62,7 @@ create index if not exists admin_users_user_id_idx on public.admin_users (user_i
 alter table public.players enable row level security;
 alter table public.matches enable row level security;
 alter table public.admin_users enable row level security;
+alter table public.tournament_drafts enable row level security;
 
 drop policy if exists "Admins can read their own admin row" on public.admin_users;
 create policy "Admins can read their own admin row"
@@ -111,3 +119,10 @@ create policy "Admins can delete matches"
 on public.matches for delete
 to authenticated
 using ((select public.is_admin()));
+
+drop policy if exists "Tournament drafts are admin-only" on public.tournament_drafts;
+create policy "Tournament drafts are admin-only"
+on public.tournament_drafts for all
+to authenticated
+using ((select public.is_admin()))
+with check ((select public.is_admin()));
