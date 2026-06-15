@@ -1,0 +1,22 @@
+# Netlify configuration for a statically-exported Next.js app.
+# The build runs `next build`, which (with `output: 'export'` in next.config.mjs)
+# writes the static site to `out/`. Set NEXT_PUBLIC_SUPABASE_URL and
+# NEXT_PUBLIC_SUPABASE_ANON_KEY in the Netlify UI (Site settings → Environment).
+
+[build]
+  command = "npm run build"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Never cache the service worker or the web manifest, so PWA updates ship instantly.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
