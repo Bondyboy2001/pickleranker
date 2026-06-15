@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { PlayerAutocomplete, PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { RatingChart } from './RatingChart'
 import {
@@ -550,7 +550,9 @@ function HeadToHeadPanel({
   )
 }
 
-export function PlayersPanel({
+export const PlayersPanel = memo(PlayersPanelBase)
+
+function PlayersPanelBase({
   data,
   standings,
   rankByPlayerId,

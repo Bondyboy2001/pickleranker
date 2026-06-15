@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
@@ -38,7 +38,9 @@ type WeeklyViewProps = {
   weeklyPlayerGames: WeeklyPlayerGame[]
 }
 
-export function WeeklyView({
+export const WeeklyView = memo(WeeklyViewBase)
+
+function WeeklyViewBase({
   weekOptions,
   activeWeek,
   onWeekChange,

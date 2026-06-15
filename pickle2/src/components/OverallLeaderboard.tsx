@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { CalendarDays, Trophy } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { SortableHeader } from './SortableHeader'
@@ -30,7 +31,9 @@ type OverallLeaderboardProps = {
   lastUpdated: string
 }
 
-export function OverallLeaderboard({
+export const OverallLeaderboard = memo(OverallLeaderboardBase)
+
+function OverallLeaderboardBase({
   standings,
   sortedStandings,
   filteredStandings,

@@ -366,28 +366,37 @@ function App() {
   )
   const lastUpdated = formatPlayedOnDate(latestPlayedOn(data.matches))
 
-  function goToTab(tab: PublicTab, options?: { playerId?: string; week?: string }) {
-    if (tab === 'overall') setSort({ key: 'rank', direction: 'asc' })
-    if (tab === 'weekly') setWeeklySort({ key: 'rank', direction: 'asc' })
-    navigateTo({ page: 'public', tab, playerId: options?.playerId, week: options?.week })
-  }
+  const goToTab = useCallback(
+    (tab: PublicTab, options?: { playerId?: string; week?: string }) => {
+      if (tab === 'overall') setSort({ key: 'rank', direction: 'asc' })
+      if (tab === 'weekly') setWeeklySort({ key: 'rank', direction: 'asc' })
+      navigateTo({ page: 'public', tab, playerId: options?.playerId, week: options?.week })
+    },
+    [],
+  )
 
-  function openPlayerProfile(playerId: string) {
-    setSelectedPlayerId(playerId)
-    goToTab('players', { playerId })
-  }
+  const openPlayerProfile = useCallback(
+    (playerId: string) => {
+      setSelectedPlayerId(playerId)
+      goToTab('players', { playerId })
+    },
+    [goToTab],
+  )
 
-  function selectWeeklyPlayer(playerId: string) {
-    setSelectedWeeklyPlayerId(playerId)
-    navigateTo({
-      page: 'public',
-      tab: 'weekly',
-      playerId,
-      week: activeWeek || undefined,
-    })
-  }
+  const selectWeeklyPlayer = useCallback(
+    (playerId: string) => {
+      setSelectedWeeklyPlayerId(playerId)
+      navigateTo({
+        page: 'public',
+        tab: 'weekly',
+        playerId,
+        week: activeWeek || undefined,
+      })
+    },
+    [activeWeek],
+  )
 
-  function openWeeklyWeek(playerId: string, week: string) {
+  const openWeeklyWeek = useCallback((playerId: string, week: string) => {
     setSelectedWeeklyPlayerId(playerId)
     setSelectedWeek(week)
     setWeeklySort({ key: 'rank', direction: 'asc' })
@@ -397,7 +406,7 @@ function App() {
       playerId,
       week,
     })
-  }
+  }, [])
 
   function requireAdmin() {
     if (canEdit) return true
@@ -663,19 +672,46 @@ function App() {
     return true
   }
 
-  function toggleSort(key: SortKey) {
+  const toggleSort = useCallback((key: SortKey) => {
     setSort((current) => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
     }))
-  }
+  }, [])
 
-  function toggleWeeklySort(key: WeeklySortKey) {
+  const toggleWeeklySort = useCallback((key: WeeklySortKey) => {
     setWeeklySort((current) => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
     }))
-  }
+  }, [])
+
+  // Stable callbacks/objects so the memoized view components don't re-render on
+  // unrelated parent updates (e.g. the auto-dismiss notice timer).
+  const toggleTheme = useCallback(
+    () => setTheme((current) => (current === 'dark' ? 'light' : 'dark')),
+    [],
+  )
+  const goToAdminFromLogo = useCallback(() => {
+    window.location.hash = buildAdminRoute()
+  }, [])
+  const handlePlayersSelect = useCallback((playerId: string) => {
+    setSelectedPlayerId(playerId)
+    navigateTo({ page: 'public', tab: 'players', playerId })
+  }, [])
+  const handleWeeklyWeekChange = useCallback((week: string) => {
+    setSelectedWeek(week)
+    setWeeklySort({ key: 'rank', direction: 'asc' })
+    setSelectedWeeklyPlayerId(null)
+    navigateTo({ page: 'public', tab: 'weekly', week })
+  }, [])
+  const mostImprovedSummary = useMemo(
+    () =>
+      mostImprovedPlayer
+        ? { name: mostImprovedPlayer.name, change: mostImprovedPlayer.change }
+        : null,
+    [mostImprovedPlayer],
+  )
 
   const confirmDialog = confirmAction
     ? confirmAction.type === 'delete-match'
@@ -719,13 +755,11 @@ function App() {
         isAdminPage={isAdminPage}
         activeTab={activeTab}
         theme={theme}
-        onTabChange={(tab) => goToTab(tab)}
-        onThemeToggle={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+        onTabChange={goToTab}
+        onThemeToggle={toggleTheme}
         lastSyncedAt={lastSyncedAt}
         isLoading={loadState === 'loading' && isSupabaseConfigured}
-        onLogoLongPress={() => {
-          window.location.hash = buildAdminRoute()
-        }}
+        onLogoLongPress={goToAdminFromLogo}
       />
 
       {loadState === 'loading' && isSupabaseConfigured ? (
@@ -797,23 +831,14 @@ function App() {
                 recentMatches={recentMatches}
                 playerNameById={playerNameById}
                 averageRating={averageRating}
-                mostImprovedPlayer={
-                  mostImprovedPlayer
-                    ? { name: mostImprovedPlayer.name, change: mostImprovedPlayer.change }
-                    : null
-                }
+                mostImprovedPlayer={mostImprovedSummary}
                 lastUpdated={lastUpdated}
               />
             ) : activeTab === 'weekly' ? (
               <WeeklyView
                 weekOptions={weekOptions}
                 activeWeek={activeWeek}
-                onWeekChange={(week) => {
-                  setSelectedWeek(week)
-                  setWeeklySort({ key: 'rank', direction: 'asc' })
-                  setSelectedWeeklyPlayerId(null)
-                  navigateTo({ page: 'public', tab: 'weekly', week })
-                }}
+                onWeekChange={handleWeeklyWeekChange}
                 weeklySearch={weeklySearch}
                 onWeeklySearchChange={setWeeklySearch}
                 weeklySearchPlayers={weeklySearchPlayers}
@@ -833,10 +858,7 @@ function App() {
                 standings={standings}
                 rankByPlayerId={rankByPlayerId}
                 selectedPlayerId={effectivePlayerId}
-                onSelectPlayer={(playerId) => {
-                  setSelectedPlayerId(playerId)
-                  navigateTo({ page: 'public', tab: 'players', playerId })
-                }}
+                onSelectPlayer={handlePlayersSelect}
                 onOpenWeeklyWeek={openWeeklyWeek}
               />
             )}
