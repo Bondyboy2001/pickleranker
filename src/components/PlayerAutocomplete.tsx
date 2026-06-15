@@ -120,6 +120,7 @@ export function PlayerAutocomplete({
           onFocus={() => setOpen(true)}
           onKeyDown={handleInputKeyDown}
           autoComplete="off"
+          role="combobox"
           aria-autocomplete="list"
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
@@ -236,6 +237,7 @@ export function PlayerSearchAutocomplete({
           onFocus={() => setOpen(true)}
           onKeyDown={handleInputKeyDown}
           autoComplete="off"
+          role="combobox"
           aria-label={ariaLabel}
           aria-autocomplete="list"
           aria-expanded={open}

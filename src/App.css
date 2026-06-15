@@ -359,7 +359,7 @@ td span {
 .admin-page {
   display: grid;
   gap: 18px;
-  align-items: start;
+  align-items: flex-start;
   margin: 18px 28px 28px;
 }
 
@@ -426,7 +426,7 @@ td span {
 .players-workspace {
   display: grid;
   gap: 18px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .weekly-workspace {
@@ -443,7 +443,7 @@ td span {
 }
 
 .weekly-workspace > .weekly-detail-panel {
-  align-self: start;
+  align-self: flex-start;
 }
 
 .players-workspace {
@@ -463,7 +463,7 @@ td span {
 }
 
 .players-list-panel {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .head-to-head-panel {
@@ -473,7 +473,7 @@ td span {
 
 .head-to-head-head {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 14px;
@@ -688,7 +688,7 @@ td span {
 
 .players-profile-head {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: 18px;
@@ -725,7 +725,7 @@ td span {
 .players-profile-rating {
   display: flex;
   flex-direction: column;
-  align-items: end;
+  align-items: flex-end;
   gap: 4px;
 }
 
@@ -856,7 +856,7 @@ td span {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 410px;
   gap: 18px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .panel {
@@ -889,7 +889,7 @@ td span {
 .leaderboard-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: flex-end;
   gap: 12px;
   padding: var(--table-inset);
   border-bottom: none;
@@ -975,15 +975,9 @@ table {
 th,
 td {
   padding: 14px 16px;
-  border-right: 2px solid var(--border-strong);
-  border-bottom: 2px solid var(--border-strong);
+  border-bottom: 1px solid var(--border);
   text-align: left;
   white-space: nowrap;
-}
-
-th:last-child,
-td:last-child {
-  border-right: 0;
 }
 
 tbody tr:last-child td,
@@ -1043,6 +1037,7 @@ th {
 td {
   color: var(--text-strong);
   font-size: 17px;
+  font-variant-numeric: tabular-nums;
 }
 
 td strong {
@@ -1056,6 +1051,10 @@ tbody tr {
   transition:
     background 160ms ease,
     box-shadow 160ms ease;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--row-stripe);
 }
 
 tbody tr:hover {
@@ -1190,7 +1189,7 @@ tbody tr.selected-row {
 
 .chart-hover-summary {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   margin-top: 12px;
@@ -1218,7 +1217,7 @@ tbody tr.selected-row {
 .chart-hover-values {
   display: flex;
   flex-direction: column;
-  align-items: end;
+  align-items: flex-end;
   gap: 4px;
 }
 
@@ -1416,7 +1415,7 @@ tbody tr.selected-row {
 
 .add-player-form {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .game-entry-form .primary-button,
@@ -1978,7 +1977,8 @@ select:focus {
 
   .players-profile-panel {
     position: static;
-    max-height: min(70dvh, 640px);
+    max-height: none;
+    overflow: visible;
   }
 
   .players-stat-grid {
@@ -2276,7 +2276,7 @@ select:focus {
   .weekly-table .rating-cell {
     grid-column: 5 / 7;
     grid-row: 1;
-    justify-self: end;
+    justify-self: flex-end;
     font-size: 22px;
   }
 
@@ -2334,7 +2334,7 @@ select:focus {
   }
 
   .players-profile-rating {
-    align-items: start;
+    align-items: flex-start;
   }
 
   .players-profile-rating strong {
@@ -2364,7 +2364,7 @@ select:focus {
   }
 
   .chart-hover-values {
-    align-items: start;
+    align-items: flex-start;
   }
 
   .chart-hover-rating {
@@ -2486,7 +2486,7 @@ select:focus {
   display: grid;
   grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
   gap: 16px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .tournament-stat-pills {
@@ -2607,7 +2607,7 @@ select:focus {
   display: grid;
   grid-template-columns: minmax(110px, 140px) auto auto;
   gap: 10px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .tournament-timer-controls .admin-field {
@@ -3249,18 +3249,6 @@ select:focus {
   line-height: 1.4;
 }
 
-.explainer-list {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.65;
-}
-
-.explainer-list li + li {
-  margin-top: 10px;
-}
-
 .explainer-card-label {
   display: block;
   margin-bottom: 6px;
@@ -3272,7 +3260,7 @@ select:focus {
 
 .explainer-example-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
 }
 
@@ -3285,17 +3273,6 @@ select:focus {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
-}
-
-.explainer-note {
-  padding: 14px 16px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
-  background: var(--surface-alt);
-}
-
-.explainer-note p {
-  color: var(--text);
 }
 
 .confirm-overlay {

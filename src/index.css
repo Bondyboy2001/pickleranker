@@ -23,6 +23,7 @@
   --table-head: #1b5e45;
   --table-head-text: #ffffff;
   --row-hover: #f3f8f5;
+  --row-stripe: #f7faf8;
   --panel-wash: rgba(26, 107, 79, 0.06);
   --card-wash: rgba(255, 255, 255, 0.72);
   --selected-row: linear-gradient(90deg, rgba(227, 240, 233, 0.98), #ffffff 68%);
@@ -64,6 +65,7 @@
   --table-head: #2a4034;
   --table-head-text: #f2f8f4;
   --row-hover: #243038;
+  --row-stripe: #1e252b;
   --panel-wash: rgba(143, 207, 106, 0.08);
   --card-wash: rgba(255, 255, 255, 0.04);
   --selected-row: linear-gradient(90deg, rgba(52, 72, 58, 0.82), rgba(26, 32, 37, 0.98) 68%);

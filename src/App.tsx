@@ -327,11 +327,6 @@ function App() {
   const routePlayerId = route.page === 'public' ? route.playerId : undefined
   const effectiveWeeklyPlayerId =
     selectedWeeklyPlayerId ?? routePlayerId ?? weeklyStandings[0]?.playerId ?? null
-  const effectivePlayerId =
-    selectedPlayerId ??
-    (route.page === 'public' && route.tab === 'players' ? route.playerId : null) ??
-    standings[0]?.id ??
-    null
   const selectedWeeklyComputedPlayer = useMemo(
     () => weeklyStandings.find((player) => player.playerId === effectiveWeeklyPlayerId),
     [effectiveWeeklyPlayerId, weeklyStandings],
@@ -828,8 +823,6 @@ function App() {
                 onToggleSort={toggleSort}
                 playerCount={data.players.length}
                 matchCount={data.matches.length}
-                recentMatches={recentMatches}
-                playerNameById={playerNameById}
                 averageRating={averageRating}
                 mostImprovedPlayer={mostImprovedSummary}
                 lastUpdated={lastUpdated}
@@ -857,7 +850,7 @@ function App() {
                 data={data}
                 standings={standings}
                 rankByPlayerId={rankByPlayerId}
-                selectedPlayerId={effectivePlayerId}
+                selectedPlayerId={selectedPlayerId}
                 onSelectPlayer={handlePlayersSelect}
                 onOpenWeeklyWeek={openWeeklyWeek}
               />

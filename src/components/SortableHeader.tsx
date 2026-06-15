@@ -15,14 +15,13 @@ export function SortableHeader<T extends string>({
 }) {
   const isActive = activeSort.key === sortKey
   return (
-    <th>
+    <th
+      aria-sort={isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
       <button
         type="button"
         className={isActive ? 'sort-button active' : 'sort-button'}
         onClick={() => onSort(sortKey)}
-        aria-sort={
-          isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
-        }
         title={title}
       >
         {label}

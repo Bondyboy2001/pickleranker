@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import Image from 'next/image'
 import { Moon, Sun } from 'lucide-react'
 import { SyncStatus } from './SyncStatus'
 import { buildAdminRoute, buildPublicRoute, type PublicTab } from '../lib/routing'
@@ -39,13 +40,13 @@ function AppHeaderBase({
           }}
           aria-label="David Lloyd Cardiff Pickleball leaderboard home"
         >
-          <img
+          <Image
             className="brand-logo"
-            src="./david-lloyd-pickleball-logo.png"
+            src="/david-lloyd-pickleball-logo.png"
             alt="David Lloyd Clubs Pickleball"
             width={640}
             height={367}
-            decoding="async"
+            priority
           />
         </button>
       </div>

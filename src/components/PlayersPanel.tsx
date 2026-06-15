@@ -78,14 +78,13 @@ function HistorySortableHeader({
 }) {
   const isActive = activeSort.key === sortKey
   return (
-    <th>
+    <th
+      aria-sort={isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
       <button
         type="button"
         className={isActive ? 'sort-button active' : 'sort-button'}
         onClick={() => onSort(sortKey)}
-        aria-sort={
-          isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
-        }
       >
         {label}
         <span>{isActive ? (activeSort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
@@ -569,12 +568,6 @@ function PlayersPanelBase({
 }) {
   const [search, setSearch] = useState('')
 
-  const filteredPlayers = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return standings
-    return standings.filter((player) => player.name.toLowerCase().includes(query))
-  }, [search, standings])
-
   const selectedPlayer = useMemo(
     () => standings.find((player) => player.id === selectedPlayerId) ?? null,
     [selectedPlayerId, standings],
@@ -603,44 +596,6 @@ function PlayersPanelBase({
               ariaLabel="Search players"
               className="players-search"
             />
-          </div>
-          <div className="players-list">
-            {filteredPlayers.map((player) => {
-              const rank = rankByPlayerId.get(player.id) ?? 0
-              const isSelected = player.id === selectedPlayerId
-              return (
-                <button
-                  key={player.id}
-                  type="button"
-                  className={`players-list-item${isSelected ? ' selected' : ''}`}
-                  onClick={() => onSelectPlayer(player.id)}
-                >
-                  <span
-                    className={`players-list-rank rank-pos-${rank <= 3 ? rank : 'other'}`}
-                    data-rank={rank}
-                  >
-                    {rank}
-                  </span>
-                  <span className="player-avatar" aria-hidden="true">
-                    {player.name.slice(0, 1)}
-                  </span>
-                  <span className="players-list-copy">
-                    <strong>{player.name}</strong>
-                    <small>
-                      {formatRating(player.rating)} · {player.wins}-{player.losses} ·{' '}
-                      {player.games} game{player.games === 1 ? '' : 's'}
-                    </small>
-                  </span>
-                </button>
-              )
-            })}
-            {filteredPlayers.length === 0 ? (
-              <p className="players-list-empty">
-                {standings.length === 0
-                  ? 'No players yet.'
-                  : `No players match "${search.trim()}".`}
-              </p>
-            ) : null}
           </div>
         </section>
       </div>

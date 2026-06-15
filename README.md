@@ -51,12 +51,14 @@ Copy `.env.example` to `.env.local` and fill in your Supabase project values.
    values ('<user-uuid>', 'ben@pickleranker.local');
    ```
 
-## Deploy to Vercel
+## Deploy to Netlify
 
-1. Push the repo and import it in Vercel (Root Directory: repo root).
-2. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the Vercel
-   project settings (Production + Preview).
-3. Deploy — the Next.js preset is auto-detected.
+The app is a static export (`output: 'export'`), so it deploys as plain static
+files — no server runtime. Config lives in `netlify.toml`.
+
+1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the
+   Netlify site settings (Environment variables).
+2. Deploy from the repo root: `netlify deploy --build --prod`.
 
 ## Verify scoring
 

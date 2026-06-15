@@ -61,7 +61,9 @@ function WeeklyViewBase({
 
   function selectWeeklyPlayer(playerId: string) {
     onSelectPlayer(playerId)
-    if (!window.matchMedia('(max-width: 680px)').matches) return
+    // Only scroll when the detail panel stacks below the table (≤1080px). On wider
+    // screens it sits beside the table and is already in view.
+    if (!window.matchMedia('(max-width: 1080px)').matches) return
     window.requestAnimationFrame(() => {
       weeklyDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })

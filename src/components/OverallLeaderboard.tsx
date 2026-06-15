@@ -2,11 +2,10 @@ import { memo } from 'react'
 import { CalendarDays, Trophy } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { SortableHeader } from './SortableHeader'
-import { RecentActivity } from './RecentActivity'
 import { StickyPlayerBar } from './StickyPlayerBar'
 import { formatSignedPoints, formatWinRate } from '../lib/format'
 import { formatRating } from '../lib/scoring'
-import type { Match, PlayerStanding, SortDirection, SortKey } from '../lib/types'
+import type { PlayerStanding, SortDirection, SortKey } from '../lib/types'
 
 const LEADERBOARD_COLUMN_COUNT = 8
 
@@ -24,8 +23,6 @@ type OverallLeaderboardProps = {
   onToggleSort: (key: SortKey) => void
   playerCount: number
   matchCount: number
-  recentMatches: Match[]
-  playerNameById: Map<string, string>
   averageRating: number
   mostImprovedPlayer: { name: string; change: number } | null
   lastUpdated: string
@@ -47,8 +44,6 @@ function OverallLeaderboardBase({
   onToggleSort,
   playerCount,
   matchCount,
-  recentMatches,
-  playerNameById,
   averageRating,
   mostImprovedPlayer,
   lastUpdated,
@@ -91,8 +86,6 @@ function OverallLeaderboardBase({
           </div>
         </div>
       </section>
-
-      <RecentActivity matches={recentMatches} playerNameById={playerNameById} limit={5} />
 
       {pinnedPlayer ? (
         <StickyPlayerBar
@@ -184,12 +177,7 @@ function OverallLeaderboardBase({
                       {rank}
                     </td>
                     <td className="leaderboard-player-cell">
-                      <div className="player-cell">
-                        <span className="player-avatar" aria-hidden="true">
-                          {player.name.slice(0, 1)}
-                        </span>
-                        <strong>{player.name}</strong>
-                      </div>
+                      <strong>{player.name}</strong>
                     </td>
                     <td className="rating-cell">{formatRating(player.rating)}</td>
                     <td data-label="Wins">{player.wins}</td>

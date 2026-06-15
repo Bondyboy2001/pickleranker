@@ -111,6 +111,7 @@ export function PlayerSearchAdd({
           onFocus={() => setOpen(true)}
           onKeyDown={handleInputKeyDown}
           autoComplete="off"
+          role="combobox"
           aria-autocomplete="list"
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
