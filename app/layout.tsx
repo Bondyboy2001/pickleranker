@@ -4,7 +4,10 @@ import '@fontsource/atkinson-hyperlegible/700.css'
 import '../src/index.css'
 import '../src/App.css'
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: 'David Lloyd Cardiff Pickleball Leaderboard',
   description:
     'David Lloyd Cardiff pickleball leaderboard with 4DR ratings, weekly results, and player stats.',
@@ -16,12 +19,12 @@ export const metadata: Metadata = {
     title: 'David Lloyd Cardiff Pickleball Leaderboard',
     description: 'Live 4DR rankings, weekly session results, and player rating history.',
     type: 'website',
-    url: 'https://dlpickle.pages.dev/',
-    images: ['https://dlpickle.pages.dev/david-lloyd-pickleball-logo.png'],
+    url: '/',
+    images: ['/david-lloyd-pickleball-logo.png'],
   },
   twitter: {
     card: 'summary_large_image',
-    images: ['https://dlpickle.pages.dev/david-lloyd-pickleball-logo.png'],
+    images: ['/david-lloyd-pickleball-logo.png'],
   },
 }
 

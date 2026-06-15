@@ -1,7 +1,7 @@
+import { memo } from 'react'
 import { CalendarDays, Trophy } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { SortableHeader } from './SortableHeader'
-import { ColumnLegend } from './ColumnLegend'
 import { RecentActivity } from './RecentActivity'
 import { StickyPlayerBar } from './StickyPlayerBar'
 import { formatSignedPoints, formatWinRate } from '../lib/format'
@@ -9,18 +9,6 @@ import { formatRating } from '../lib/scoring'
 import type { Match, PlayerStanding, SortDirection, SortKey } from '../lib/types'
 
 const LEADERBOARD_COLUMN_COUNT = 8
-const MIN_GAMES_STORAGE_KEY = 'pickleranker-min-games'
-
-export function readMinGamesFilter(): number {
-  if (typeof localStorage === 'undefined') return 0
-  const stored = localStorage.getItem(MIN_GAMES_STORAGE_KEY)
-  const value = stored ? Number(stored) : 0
-  return Number.isFinite(value) && value >= 0 ? value : 0
-}
-
-export function writeMinGamesFilter(value: number) {
-  localStorage.setItem(MIN_GAMES_STORAGE_KEY, String(value))
-}
 
 type OverallLeaderboardProps = {
   standings: PlayerStanding[]
@@ -34,8 +22,6 @@ type OverallLeaderboardProps = {
   onPinPlayer: (playerId: string | null) => void
   sort: { key: SortKey; direction: SortDirection }
   onToggleSort: (key: SortKey) => void
-  minGames: number
-  onMinGamesChange: (value: number) => void
   playerCount: number
   matchCount: number
   recentMatches: Match[]
@@ -45,7 +31,9 @@ type OverallLeaderboardProps = {
   lastUpdated: string
 }
 
-export function OverallLeaderboard({
+export const OverallLeaderboard = memo(OverallLeaderboardBase)
+
+function OverallLeaderboardBase({
   standings,
   sortedStandings,
   filteredStandings,
@@ -57,8 +45,6 @@ export function OverallLeaderboard({
   onPinPlayer,
   sort,
   onToggleSort,
-  minGames,
-  onMinGamesChange,
   playerCount,
   matchCount,
   recentMatches,
@@ -132,21 +118,7 @@ export function OverallLeaderboard({
             ariaLabel="Search players"
             className="leaderboard-search"
           />
-          <label className="min-games-filter">
-            <span>Min games</span>
-            <select
-              value={minGames}
-              onChange={(event) => onMinGamesChange(Number(event.target.value))}
-              aria-label="Minimum games to show"
-            >
-              <option value={0}>All players</option>
-              <option value={1}>1+</option>
-              <option value={3}>3+</option>
-              <option value={5}>5+</option>
-            </select>
-          </label>
         </div>
-        <ColumnLegend />
         <div className="table-wrap leaderboard-table-wrap">
           <table className="leaderboard-table">
             <thead>
@@ -191,11 +163,11 @@ export function OverallLeaderboard({
             <tbody>
               {filteredStandings.map((player) => {
                 const rank = rankByPlayerId.get(player.id) ?? 0
-                const lowSample = minGames > 0 && player.games < minGames
+                const pointDiff = player.pointsFor - player.pointsAgainst
                 return (
                   <tr
                     key={player.id}
-                    className={`leaderboard-row${lowSample ? ' low-sample' : ''}${pinnedPlayerId === player.id ? ' pinned-row' : ''}`}
+                    className={`leaderboard-row${pinnedPlayerId === player.id ? ' pinned-row' : ''}`}
                     tabIndex={0}
                     onClick={() => onPlayerSelect(player.id)}
                     onKeyDown={(event) => {
@@ -211,7 +183,7 @@ export function OverallLeaderboard({
                     >
                       {rank}
                     </td>
-                    <td>
+                    <td className="leaderboard-player-cell">
                       <div className="player-cell">
                         <span className="player-avatar" aria-hidden="true">
                           {player.name.slice(0, 1)}
@@ -220,14 +192,14 @@ export function OverallLeaderboard({
                       </div>
                     </td>
                     <td className="rating-cell">{formatRating(player.rating)}</td>
-                    <td>{player.wins}</td>
-                    <td>{player.losses}</td>
-                    <td>{player.games}</td>
-                    <td>
-                      {player.pointsFor - player.pointsAgainst >= 0 ? '+' : ''}
-                      {player.pointsFor - player.pointsAgainst}
+                    <td data-label="Wins">{player.wins}</td>
+                    <td data-label="Losses">{player.losses}</td>
+                    <td data-label="Games">{player.games}</td>
+                    <td data-label="Point">
+                      {pointDiff >= 0 ? '+' : ''}
+                      {pointDiff}
                     </td>
-                    <td>{formatWinRate(player.wins, player.games)}</td>
+                    <td data-label="Win %">{formatWinRate(player.wins, player.games)}</td>
                   </tr>
                 )
               })}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { PlayerAutocomplete, PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { RatingChart } from './RatingChart'
 import {
@@ -216,12 +216,14 @@ function PlayerProfileDetail({
   rank,
   totalWeeks,
   weeks,
+  onOpenWeeklyWeek,
 }: {
   data: AppData
   player: PlayerStanding
   rank: number
   totalWeeks: number
   weeks: PlayerWeekPoint[]
+  onOpenWeeklyWeek: (playerId: string, week: string) => void
 }) {
   const stats = useMemo(() => buildProfileStats(player, weeks), [player, weeks])
   const matchups = useMemo(() => buildMatchupStats(player.id, data), [player.id, data])
@@ -373,7 +375,18 @@ function PlayerProfileDetail({
               </thead>
               <tbody>
                 {history.map((week) => (
-                  <tr key={week.key}>
+                  <tr
+                    key={week.key}
+                    className="players-history-row"
+                    tabIndex={0}
+                    onClick={() => onOpenWeeklyWeek(player.id, week.key)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onOpenWeeklyWeek(player.id, week.key)
+                      }
+                    }}
+                  >
                     <td>{week.label}</td>
                     <td>{week.games}</td>
                     <td>
@@ -406,30 +419,23 @@ function HeadToHeadPanel({
   data: AppData
   standings: PlayerStanding[]
 }) {
-  const [playerAId, setPlayerAId] = useState(() => standings[0]?.id ?? '')
-  const [playerBId, setPlayerBId] = useState(() => standings[1]?.id ?? '')
-  const effectivePlayerAId = playerAId || standings[0]?.id || ''
-  const effectivePlayerBId =
-    playerBId ||
-    standings.find((player) => player.id !== effectivePlayerAId)?.id ||
-    ''
+  const [playerAId, setPlayerAId] = useState('')
+  const [playerBId, setPlayerBId] = useState('')
 
   const playerA = useMemo(
-    () => standings.find((player) => player.id === effectivePlayerAId) ?? null,
-    [standings, effectivePlayerAId],
+    () => standings.find((player) => player.id === playerAId) ?? null,
+    [standings, playerAId],
   )
   const playerB = useMemo(
-    () => standings.find((player) => player.id === effectivePlayerBId) ?? null,
-    [standings, effectivePlayerBId],
+    () => standings.find((player) => player.id === playerBId) ?? null,
+    [standings, playerBId],
   )
   const stats = useMemo(
     () =>
-      effectivePlayerAId &&
-      effectivePlayerBId &&
-      effectivePlayerAId !== effectivePlayerBId
-        ? buildHeadToHeadStats(effectivePlayerAId, effectivePlayerBId, data.matches)
+      playerAId && playerBId && playerAId !== playerBId
+        ? buildHeadToHeadStats(playerAId, playerBId, data.matches)
         : null,
-    [data.matches, effectivePlayerAId, effectivePlayerBId],
+    [data.matches, playerAId, playerBId],
   )
   const playerAStatus = stats
     ? stats.winsA > stats.winsB
@@ -458,16 +464,16 @@ function HeadToHeadPanel({
       <div className="head-to-head-inputs">
         <PlayerAutocomplete
           players={standings}
-          value={effectivePlayerAId}
+          value={playerAId}
           onChange={setPlayerAId}
-          excludeIds={effectivePlayerBId ? [effectivePlayerBId] : []}
+          excludeIds={playerBId ? [playerBId] : []}
           placeholder="First player"
         />
         <PlayerAutocomplete
           players={standings}
-          value={effectivePlayerBId}
+          value={playerBId}
           onChange={setPlayerBId}
-          excludeIds={effectivePlayerAId ? [effectivePlayerAId] : []}
+          excludeIds={playerAId ? [playerAId] : []}
           placeholder="Second player"
         />
       </div>
@@ -544,18 +550,22 @@ function HeadToHeadPanel({
   )
 }
 
-export function PlayersPanel({
+export const PlayersPanel = memo(PlayersPanelBase)
+
+function PlayersPanelBase({
   data,
   standings,
   rankByPlayerId,
   selectedPlayerId,
   onSelectPlayer,
+  onOpenWeeklyWeek,
 }: {
   data: AppData
   standings: PlayerStanding[]
   rankByPlayerId: Map<string, number>
   selectedPlayerId: string | null
   onSelectPlayer: (playerId: string) => void
+  onOpenWeeklyWeek: (playerId: string, week: string) => void
 }) {
   const [search, setSearch] = useState('')
 
@@ -642,6 +652,7 @@ export function PlayersPanel({
           rank={rankByPlayerId.get(selectedPlayer.id) ?? 0}
           totalWeeks={totalWeeks}
           weeks={selectedWeeks}
+          onOpenWeeklyWeek={onOpenWeeklyWeek}
         />
       ) : (
         <aside className="panel players-profile-panel empty">

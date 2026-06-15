@@ -16,7 +16,6 @@ import {
 import { AdminField, FieldInput } from './AdminField'
 import { PlayerAutocomplete } from './PlayerAutocomplete'
 import { TournamentPanel } from './TournamentPanel'
-import { formatResultsLabel, makeId } from '../lib/data'
 import type { AppData, Match, MatchFormState, PlayerStanding } from '../lib/types'
 import type { Session } from '@supabase/supabase-js'
 
@@ -30,67 +29,6 @@ function formatMatchEditedAt(match: Match) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(match.updatedAt))
-}
-
-function parseBulkCsv(
-  raw: string,
-  players: AppData['players'],
-): { matches: Omit<Match, 'id' | 'week'>[] } | { error: string } {
-  const lines = raw
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-  if (lines.length === 0) return { error: 'Paste at least one row.' }
-
-  const nameToId = new Map(players.map((player) => [player.name.trim().toLowerCase(), player.id]))
-  const rows: Omit<Match, 'id' | 'week'>[] = []
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]
-    if (index === 0 && line.toLowerCase().includes('date') && line.toLowerCase().includes('score')) {
-      continue
-    }
-    const parts = line.split(',').map((part) => part.trim())
-    if (parts.length < 7) {
-      return { error: `Line ${index + 1}: need date, 4 player names, and 2 scores.` }
-    }
-    const [playedOn, n1, n2, n3, n4, scoreAStr, scoreBStr] = parts
-    const ids = [n1, n2, n3, n4].map((name) => nameToId.get(name.toLowerCase()))
-    if (ids.some((id) => !id)) {
-      return { error: `Line ${index + 1}: unknown player name.` }
-    }
-    const scoreA = Number(scoreAStr)
-    const scoreB = Number(scoreBStr)
-    if (!playedOn || Number.isNaN(scoreA) || Number.isNaN(scoreB) || scoreA === scoreB) {
-      return { error: `Line ${index + 1}: invalid date or scores.` }
-    }
-    if (new Set(ids).size !== 4) {
-      return { error: `Line ${index + 1}: each player can only appear once.` }
-    }
-
-    let winningTeamA: [string, string] = [ids[0]!, ids[1]!]
-    let losingTeamB: [string, string] = [ids[2]!, ids[3]!]
-    let winningScore = scoreA
-    let losingScore = scoreB
-    if (scoreB > scoreA) {
-      winningTeamA = [ids[2]!, ids[3]!]
-      losingTeamB = [ids[0]!, ids[1]!]
-      winningScore = scoreB
-      losingScore = scoreA
-    }
-
-    rows.push({
-      playedOn,
-      teamA: winningTeamA,
-      teamB: losingTeamB,
-      scoreA: winningScore,
-      scoreB: losingScore,
-    })
-  }
-
-  if (rows.length === 0) return { error: 'No game rows found.' }
-  return { matches: rows }
 }
 
 export function AdminPage({
@@ -123,7 +61,6 @@ export function AdminPage({
   cancelEditMatch,
   startEditMatch,
   requestDeleteMatch,
-  onBulkImport,
   lastSavedMatchForm,
 }: {
   authForm: { username: string; password: string }
@@ -155,13 +92,10 @@ export function AdminPage({
   cancelEditMatch: () => void
   startEditMatch: (match: Match) => void
   requestDeleteMatch: (matchId: string) => void
-  onBulkImport: (matches: Match[]) => Promise<void>
   lastSavedMatchForm: MatchFormState | null
 }) {
-  const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent' | 'import'>('games')
+  const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
-  const [bulkCsv, setBulkCsv] = useState('')
-  const [bulkError, setBulkError] = useState('')
   const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -188,24 +122,6 @@ export function AdminPage({
     })
     setMatchError('')
     document.getElementById('match-score-a')?.focus()
-  }
-
-  async function submitBulkImport(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setBulkError('')
-    const parsed = parseBulkCsv(bulkCsv, data.players)
-    if ('error' in parsed) {
-      setBulkError(parsed.error)
-      return
-    }
-    const matches: Match[] = parsed.matches.map((row) => ({
-      id: makeId('m'),
-      week: formatResultsLabel(row.playedOn),
-      ...row,
-    }))
-    await onBulkImport(matches)
-    setBulkCsv('')
-    setAdminTab('recent')
   }
 
   const loginStatus = !isSupabaseConfigured
@@ -316,13 +232,6 @@ export function AdminPage({
           </button>
           <button
             type="button"
-            className={adminTab === 'import' ? 'active' : ''}
-            onClick={() => setAdminTab('import')}
-          >
-            Bulk import
-          </button>
-          <button
-            type="button"
             className={adminTab === 'recent' ? 'active' : ''}
             onClick={() => setAdminTab('recent')}
           >
@@ -333,33 +242,6 @@ export function AdminPage({
 
       {canEdit && adminTab === 'tournament' ? (
         <TournamentPanel standings={standings} saveRoundMatches={saveTournamentRound} />
-      ) : null}
-
-      {canEdit && adminTab === 'import' ? (
-        <section className="panel bulk-import-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Bulk import session</h2>
-              <p>
-                One game per line:{' '}
-                <code>date, player1, player2, player3, player4, scoreA, scoreB</code>
-              </p>
-            </div>
-          </div>
-          <form onSubmit={(event) => void submitBulkImport(event)}>
-            <textarea
-              className="bulk-import-textarea"
-              value={bulkCsv}
-              onChange={(event) => setBulkCsv(event.target.value)}
-              placeholder={`2026-06-12, Alice, Bob, Carol, Dave, 11, 8\n2026-06-12, Eve, Frank, Grace, Henry, 9, 11`}
-              rows={8}
-            />
-            {bulkError ? <p className="form-error">{bulkError}</p> : null}
-            <button type="submit" className="primary-button" disabled={savingAction === 'bulk'}>
-              Import games
-            </button>
-          </form>
-        </section>
       ) : null}
 
       {canEdit && adminTab === 'games' ? (

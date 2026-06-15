@@ -1,8 +1,11 @@
+import { memo } from 'react'
 import { Moon, Sun } from 'lucide-react'
 import { SyncStatus } from './SyncStatus'
 import { buildAdminRoute, buildPublicRoute, type PublicTab } from '../lib/routing'
 
-export function AppHeader({
+export const AppHeader = memo(AppHeaderBase)
+
+function AppHeaderBase({
   isAdminPage,
   activeTab,
   theme,
@@ -40,6 +43,9 @@ export function AppHeader({
             className="brand-logo"
             src="./david-lloyd-pickleball-logo.png"
             alt="David Lloyd Clubs Pickleball"
+            width={640}
+            height={367}
+            decoding="async"
           />
         </button>
       </div>
@@ -89,7 +95,7 @@ export function AppHeader({
   )
 }
 
-export function AppFooter() {
+export const AppFooter = memo(function AppFooter() {
   return (
     <footer className="app-footer">
       <p>David Lloyd Cardiff Pickleball · 4DR leaderboard</p>
@@ -98,4 +104,4 @@ export function AppFooter() {
       </a>
     </footer>
   )
-}
+})

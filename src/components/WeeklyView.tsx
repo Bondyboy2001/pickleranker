@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
@@ -38,7 +38,9 @@ type WeeklyViewProps = {
   weeklyPlayerGames: WeeklyPlayerGame[]
 }
 
-export function WeeklyView({
+export const WeeklyView = memo(WeeklyViewBase)
+
+function WeeklyViewBase({
   weekOptions,
   activeWeek,
   onWeekChange,
@@ -67,6 +69,7 @@ export function WeeklyView({
 
   return (
     <div className="weekly-workspace">
+      <div className="weekly-main-column">
       <section className="panel weekly-panel weekly-controls-panel">
         <div className="panel-heading weekly-heading">
           <PlayerSearchAutocomplete
@@ -92,13 +95,6 @@ export function WeeklyView({
           </select>
         </div>
       </section>
-
-      <WeeklyPlayerDetail
-        detailRef={weeklyDetailRef}
-        games={weeklyPlayerGames}
-        playerName={selectedWeeklyPlayerName}
-        computedPlayer={selectedWeeklyComputedPlayer}
-      />
 
       <section className="panel weekly-panel weekly-table-panel">
         <div className="table-wrap">
@@ -162,7 +158,7 @@ export function WeeklyView({
                     <td className="rank-cell">
                       {weeklyRankByPlayerId.get(player.playerId) ?? index + 1}
                     </td>
-                    <td>
+                    <td className="weekly-player-cell">
                       <strong>{player.name}</strong>
                       <span>
                         {player.games} game{player.games === 1 ? '' : 's'} | point{' '}
@@ -171,13 +167,13 @@ export function WeeklyView({
                       </span>
                     </td>
                     <td className="rating-cell">{formatRating(player.rating)}</td>
-                    <td>
+                    <td data-label="Weekly +/-">
                       <span className={movementClass(player.change)}>
                         {player.change >= 0 ? '+' : ''}
                         {player.change.toFixed(3)}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Diff">
                       <span className={movementClass(recordDifference)}>
                         {recordDifference >= 0 ? '+' : ''}
                         {recordDifference}
@@ -201,6 +197,14 @@ export function WeeklyView({
           </table>
         </div>
       </section>
+      </div>
+
+      <WeeklyPlayerDetail
+        detailRef={weeklyDetailRef}
+        games={weeklyPlayerGames}
+        playerName={selectedWeeklyPlayerName}
+        computedPlayer={selectedWeeklyComputedPlayer}
+      />
     </div>
   )
 }
@@ -373,64 +377,68 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
             </p>
           </div>
 
-          <table className="points-breakdown">
-            <thead>
-              <tr>
-                <th />
-                <th>4DR</th>
-                <th>Score</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th>Winners</th>
-                <td className="positive">{formatSignedPoints(game.baseDelta)}</td>
-                <td className="positive">{formatSignedPoints(marginBonus)}</td>
-                <td className="positive">{formatSignedPoints(winnerDelta)}</td>
-              </tr>
-              <tr>
-                <th>Losers</th>
-                <td className="negative">{formatSignedPoints(-game.baseDelta)}</td>
-                <td className="positive">{formatSignedPoints(loserPointBonus)}</td>
-                <td className={loserDelta >= 0 ? 'positive' : 'negative'}>
-                  {formatSignedPoints(loserDelta)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <table className="player-breakdown">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Start</th>
-                <th>+/-</th>
-                <th>Finish</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...winnerTeam, ...loserTeam].map((player) => (
-                <tr
-                  className={player.id === game.selectedPlayerId ? 'selected-player' : ''}
-                  key={`${game.id}-${player.id}`}
-                >
-                  <th
-                    className={
-                      winnerTeam.some((winner) => winner.id === player.id) ? 'positive' : 'negative'
-                    }
-                  >
-                    {player.name}
-                  </th>
-                  <td>{formatGameRating(player.start)}</td>
-                  <td className={player.change >= 0 ? 'positive' : 'negative'}>
-                    {formatSignedPoints(player.change)}
-                  </td>
-                  <td>{formatGameRating(player.finish)}</td>
+          <div className="table-wrap">
+            <table className="points-breakdown">
+              <thead>
+                <tr>
+                  <th />
+                  <th>4DR</th>
+                  <th>Score</th>
+                  <th>Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>Winners</th>
+                  <td className="positive">{formatSignedPoints(game.baseDelta)}</td>
+                  <td className="positive">{formatSignedPoints(marginBonus)}</td>
+                  <td className="positive">{formatSignedPoints(winnerDelta)}</td>
+                </tr>
+                <tr>
+                  <th>Losers</th>
+                  <td className="negative">{formatSignedPoints(-game.baseDelta)}</td>
+                  <td className="positive">{formatSignedPoints(loserPointBonus)}</td>
+                  <td className={loserDelta >= 0 ? 'positive' : 'negative'}>
+                    {formatSignedPoints(loserDelta)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="table-wrap">
+            <table className="player-breakdown">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Start</th>
+                  <th>+/-</th>
+                  <th>Finish</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...winnerTeam, ...loserTeam].map((player) => (
+                  <tr
+                    className={player.id === game.selectedPlayerId ? 'selected-player' : ''}
+                    key={`${game.id}-${player.id}`}
+                  >
+                    <th
+                      className={
+                        winnerTeam.some((winner) => winner.id === player.id) ? 'positive' : 'negative'
+                      }
+                    >
+                      {player.name}
+                    </th>
+                    <td>{formatGameRating(player.start)}</td>
+                    <td className={player.change >= 0 ? 'positive' : 'negative'}>
+                      {formatSignedPoints(player.change)}
+                    </td>
+                    <td>{formatGameRating(player.finish)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       ) : null}
     </article>

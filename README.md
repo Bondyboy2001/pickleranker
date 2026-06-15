@@ -1,54 +1,65 @@
 # pickleranker
 
-pickleranker is a public pickleball ranking website using 4DR scoring.
+The David Lloyd Cardiff pickleball leaderboard, built with **Next.js (App Router)**.
 
-The app has two views:
+- Public visitors open the leaderboard and recent results.
+- Admins go to `/#/manage` (or `/#/admin`), sign in, and add players or match scores.
+- Supabase stores the shared online data.
 
-- Public leaderboard: `/#/`
-- Admin score entry: `/#/manage` (also `/#/admin`)
+## Architecture
 
-Admins sign in with Supabase email/password auth. Public visitors do not need an account.
+- **Framework**: Next.js App Router (`app/`).
+- **Rendering**: the UI is hash-routed and browser-only, so the whole app is loaded
+  client-side via `dynamic(() => import('../src/App'), { ssr: false })` in `app/page.tsx`.
+- **Source**: components and lib code live under `src/` (`src/App.tsx`,
+  `src/components/`, `src/lib/`, `src/data/`).
+- **Env vars**: `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- **Metadata**: defined as `metadata` / `viewport` in `app/layout.tsx`.
+- **PWA**: service worker generated on `next build` via `@ducanh2912/next-pwa`
+  (disabled in dev).
+- **Global CSS / fonts**: imported once in `app/layout.tsx`.
 
-## Local Setup
+## Develop
 
 ```bash
 npm install
-cp .env.example .env.local
-npm run dev
+npm run dev      # http://localhost:3000
 ```
 
-Add your Supabase values to `.env.local`:
+## Build & run
 
 ```bash
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-```
-
-Without Supabase env vars, the app runs in local-only mode using browser storage.
-
-## Admin screen (easiest way to enter scores)
-
-Open `/#/manage` in the app. No extra admin app is needed.
-
-- **Local only (simplest):** run `npm run dev`, open `http://127.0.0.1:5173/#/admin`. Scores save in this browser only — no Supabase or hosting required.
-- **Shared public website:** use Supabase for the database and Cloudflare Pages for hosting.
-
-## Online Setup
-
-See [DEPLOY.md](./DEPLOY.md) for the full website setup:
-
-1. Create a Supabase project.
-2. Run `supabase/schema.sql`.
-3. Create an auth user for the admin (`ben@pickleranker.local`).
-4. Add that user to `public.admin_users`.
-5. Run `npm run deploy` to publish to Cloudflare Pages.
-
-## Scripts
-
-```bash
-npm run dev
 npm run build
-npm run deploy
-npm run lint
+npm run start
+```
+
+## Environment
+
+Copy `.env.example` to `.env.local` and fill in your Supabase project values.
+
+## Supabase setup
+
+1. Create a Supabase project and open the SQL Editor.
+2. Run `supabase/schema.sql`.
+3. For an existing project, also run `supabase/migration-2026-06-12.sql` for match
+   edit timestamps and shared tournament drafts.
+4. Create the admin user (email `ben@pickleranker.local`) under Authentication → Users,
+   then register its UUID:
+
+   ```sql
+   insert into public.admin_users (user_id, email)
+   values ('<user-uuid>', 'ben@pickleranker.local');
+   ```
+
+## Deploy to Vercel
+
+1. Push the repo and import it in Vercel (Root Directory: repo root).
+2. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the Vercel
+   project settings (Production + Preview).
+3. Deploy — the Next.js preset is auto-detected.
+
+## Verify scoring
+
+```bash
 npm run verify:scoring
 ```

@@ -1,14 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+'use client'
+
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import './App.css'
-import { AdminPage } from './components/AdminPage'
 import { AppFooter, AppHeader } from './components/AppShell'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { NoticeBanner } from './components/NoticeBanner'
-import { OverallLeaderboard, readMinGamesFilter, writeMinGamesFilter } from './components/OverallLeaderboard'
-import { PlayersPanel } from './components/PlayersPanel'
-import { RatingExplainer } from './components/RatingExplainer'
-import { WeeklyView } from './components/WeeklyView'
+import { OverallLeaderboard } from './components/OverallLeaderboard'
+
+// Code-split the admin tools and the non-default tabs so the initial (public,
+// overall-leaderboard) load doesn't ship them. Each chunk loads on first view.
+const AdminPage = lazy(() =>
+  import('./components/AdminPage').then((m) => ({ default: m.AdminPage })),
+)
+const PlayersPanel = lazy(() =>
+  import('./components/PlayersPanel').then((m) => ({ default: m.PlayersPanel })),
+)
+const RatingExplainer = lazy(() =>
+  import('./components/RatingExplainer').then((m) => ({ default: m.RatingExplainer })),
+)
+const WeeklyView = lazy(() =>
+  import('./components/WeeklyView').then((m) => ({ default: m.WeeklyView })),
+)
 import {
   checkIsAdmin,
   exportDataSnapshot,
@@ -119,7 +131,6 @@ function App() {
   const [selectedWeek, setSelectedWeek] = useState(() =>
     initialRoute.page === 'public' ? (initialRoute.week ?? '') : '',
   )
-  const [minGames, setMinGames] = useState(readMinGamesFilter)
   const [pinnedPlayerId, setPinnedPlayerId] = useState<string | null>(readPinnedPlayerId)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
   const [savingAction, setSavingAction] = useState<string | null>(null)
@@ -179,10 +190,6 @@ function App() {
       localStorage.removeItem(PINNED_PLAYER_STORAGE_KEY)
     }
   }, [pinnedPlayerId])
-
-  useEffect(() => {
-    writeMinGamesFilter(minGames)
-  }, [minGames])
 
   useEffect(() => {
     const client = supabase
@@ -280,7 +287,14 @@ function App() {
     return standings.reduce((total, player) => total + player.rating, 0) / standings.length
   }, [standings])
   const weeklyStandings = useMemo(
-    () => buildWeeklyStandings(activeWeek, summaries, data.players, data.matches, weeklySnapshots),
+    () =>
+      buildWeeklyStandings(
+        activeWeek,
+        summaries,
+        data.players,
+        data.matches,
+        weeklySnapshots,
+      ).filter((player) => player.games > 0),
     [activeWeek, summaries, data.players, data.matches, weeklySnapshots],
   )
   const weeklySearchPlayers = useMemo(
@@ -297,30 +311,14 @@ function App() {
   )
   const filteredStandings = useMemo(() => {
     const query = search.trim().toLowerCase()
-    let rows = sortedStandings
-    if (minGames > 0) rows = rows.filter((player) => player.games >= minGames)
-    if (!query) return rows
-    return rows.filter((player) => player.name.toLowerCase().includes(query))
-  }, [search, sortedStandings, minGames])
+    if (!query) return sortedStandings
+    return sortedStandings.filter((player) => player.name.toLowerCase().includes(query))
+  }, [search, sortedStandings])
   const sortedWeeklyStandings = useMemo(
     () => sortWeeklyStandings(weeklyStandings, weeklySort.key, weeklySort.direction),
     [weeklyStandings, weeklySort],
   )
-  const weeklyRankByPlayerId = useMemo(
-    () =>
-      new Map(
-        [...weeklyStandings]
-          .sort(
-            (a, b) =>
-              b.rating - a.rating ||
-              b.change - a.change ||
-              b.wins - a.wins ||
-              a.name.localeCompare(b.name),
-          )
-          .map((player, index) => [player.playerId, index + 1]),
-      ),
-    [weeklyStandings],
-  )
+  const weeklyRankByPlayerId = rankByPlayerId
   const filteredWeeklyStandings = useMemo(() => {
     const query = weeklySearch.trim().toLowerCase()
     if (!query) return sortedWeeklyStandings
@@ -368,26 +366,47 @@ function App() {
   )
   const lastUpdated = formatPlayedOnDate(latestPlayedOn(data.matches))
 
-  function goToTab(tab: PublicTab, options?: { playerId?: string; week?: string }) {
-    if (tab === 'overall') setSort({ key: 'rank', direction: 'asc' })
-    if (tab === 'weekly') setWeeklySort({ key: 'rank', direction: 'asc' })
-    navigateTo({ page: 'public', tab, playerId: options?.playerId, week: options?.week })
-  }
+  const goToTab = useCallback(
+    (tab: PublicTab, options?: { playerId?: string; week?: string }) => {
+      if (tab === 'overall') setSort({ key: 'rank', direction: 'asc' })
+      if (tab === 'weekly') setWeeklySort({ key: 'rank', direction: 'asc' })
+      navigateTo({ page: 'public', tab, playerId: options?.playerId, week: options?.week })
+    },
+    [],
+  )
 
-  function openPlayerProfile(playerId: string) {
-    setSelectedPlayerId(playerId)
-    goToTab('players', { playerId })
-  }
+  const openPlayerProfile = useCallback(
+    (playerId: string) => {
+      setSelectedPlayerId(playerId)
+      goToTab('players', { playerId })
+    },
+    [goToTab],
+  )
 
-  function selectWeeklyPlayer(playerId: string) {
+  const selectWeeklyPlayer = useCallback(
+    (playerId: string) => {
+      setSelectedWeeklyPlayerId(playerId)
+      navigateTo({
+        page: 'public',
+        tab: 'weekly',
+        playerId,
+        week: activeWeek || undefined,
+      })
+    },
+    [activeWeek],
+  )
+
+  const openWeeklyWeek = useCallback((playerId: string, week: string) => {
     setSelectedWeeklyPlayerId(playerId)
+    setSelectedWeek(week)
+    setWeeklySort({ key: 'rank', direction: 'asc' })
     navigateTo({
       page: 'public',
       tab: 'weekly',
       playerId,
-      week: activeWeek || undefined,
+      week,
     })
-  }
+  }, [])
 
   function requireAdmin() {
     if (canEdit) return true
@@ -653,39 +672,46 @@ function App() {
     return true
   }
 
-  async function bulkImportMatches(matches: Match[]) {
-    if (!requireAdmin()) return
-    setSavingAction('bulk')
-    try {
-      if (supabase) {
-        const { error } = await supabase.from('matches').insert(matches.map(matchToDb))
-        if (error) {
-          setNotice(error.message)
-          return
-        }
-      }
-      applyData(
-        { ...data, matches: [...data.matches, ...matches] },
-        `${matches.length} games imported.`,
-      )
-    } finally {
-      setSavingAction(null)
-    }
-  }
-
-  function toggleSort(key: SortKey) {
+  const toggleSort = useCallback((key: SortKey) => {
     setSort((current) => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
     }))
-  }
+  }, [])
 
-  function toggleWeeklySort(key: WeeklySortKey) {
+  const toggleWeeklySort = useCallback((key: WeeklySortKey) => {
     setWeeklySort((current) => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
     }))
-  }
+  }, [])
+
+  // Stable callbacks/objects so the memoized view components don't re-render on
+  // unrelated parent updates (e.g. the auto-dismiss notice timer).
+  const toggleTheme = useCallback(
+    () => setTheme((current) => (current === 'dark' ? 'light' : 'dark')),
+    [],
+  )
+  const goToAdminFromLogo = useCallback(() => {
+    window.location.hash = buildAdminRoute()
+  }, [])
+  const handlePlayersSelect = useCallback((playerId: string) => {
+    setSelectedPlayerId(playerId)
+    navigateTo({ page: 'public', tab: 'players', playerId })
+  }, [])
+  const handleWeeklyWeekChange = useCallback((week: string) => {
+    setSelectedWeek(week)
+    setWeeklySort({ key: 'rank', direction: 'asc' })
+    setSelectedWeeklyPlayerId(null)
+    navigateTo({ page: 'public', tab: 'weekly', week })
+  }, [])
+  const mostImprovedSummary = useMemo(
+    () =>
+      mostImprovedPlayer
+        ? { name: mostImprovedPlayer.name, change: mostImprovedPlayer.change }
+        : null,
+    [mostImprovedPlayer],
+  )
 
   const confirmDialog = confirmAction
     ? confirmAction.type === 'delete-match'
@@ -729,13 +755,11 @@ function App() {
         isAdminPage={isAdminPage}
         activeTab={activeTab}
         theme={theme}
-        onTabChange={(tab) => goToTab(tab)}
-        onThemeToggle={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+        onTabChange={goToTab}
+        onThemeToggle={toggleTheme}
         lastSyncedAt={lastSyncedAt}
         isLoading={loadState === 'loading' && isSupabaseConfigured}
-        onLogoLongPress={() => {
-          window.location.hash = buildAdminRoute()
-        }}
+        onLogoLongPress={goToAdminFromLogo}
       />
 
       {loadState === 'loading' && isSupabaseConfigured ? (
@@ -751,6 +775,7 @@ function App() {
       ) : null}
 
       <div id="main-content">
+        <Suspense fallback={<div className="load-banner">Loading…</div>}>
         {isAdminPage ? (
           <AdminPage
             authForm={authForm}
@@ -782,7 +807,6 @@ function App() {
             cancelEditMatch={cancelEditMatch}
             startEditMatch={startEditMatch}
             requestDeleteMatch={requestDeleteMatch}
-            onBulkImport={bulkImportMatches}
             lastSavedMatchForm={lastSavedMatchForm}
           />
         ) : (
@@ -802,30 +826,19 @@ function App() {
                 onPinPlayer={setPinnedPlayerId}
                 sort={sort}
                 onToggleSort={toggleSort}
-                minGames={minGames}
-                onMinGamesChange={setMinGames}
                 playerCount={data.players.length}
                 matchCount={data.matches.length}
                 recentMatches={recentMatches}
                 playerNameById={playerNameById}
                 averageRating={averageRating}
-                mostImprovedPlayer={
-                  mostImprovedPlayer
-                    ? { name: mostImprovedPlayer.name, change: mostImprovedPlayer.change }
-                    : null
-                }
+                mostImprovedPlayer={mostImprovedSummary}
                 lastUpdated={lastUpdated}
               />
             ) : activeTab === 'weekly' ? (
               <WeeklyView
                 weekOptions={weekOptions}
                 activeWeek={activeWeek}
-                onWeekChange={(week) => {
-                  setSelectedWeek(week)
-                  setWeeklySort({ key: 'rank', direction: 'asc' })
-                  setSelectedWeeklyPlayerId(null)
-                  navigateTo({ page: 'public', tab: 'weekly', week })
-                }}
+                onWeekChange={handleWeeklyWeekChange}
                 weeklySearch={weeklySearch}
                 onWeeklySearchChange={setWeeklySearch}
                 weeklySearchPlayers={weeklySearchPlayers}
@@ -845,14 +858,13 @@ function App() {
                 standings={standings}
                 rankByPlayerId={rankByPlayerId}
                 selectedPlayerId={effectivePlayerId}
-                onSelectPlayer={(playerId) => {
-                  setSelectedPlayerId(playerId)
-                  navigateTo({ page: 'public', tab: 'players', playerId })
-                }}
+                onSelectPlayer={handlePlayersSelect}
+                onOpenWeeklyWeek={openWeeklyWeek}
               />
             )}
           </div>
         )}
+        </Suspense>
       </div>
 
       {!isAdminPage ? <AppFooter /> : null}
