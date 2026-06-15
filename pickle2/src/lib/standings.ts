@@ -22,10 +22,6 @@ function getInitialRating(player: Player) {
 
 export type PlayerRatingWeeksMode = 'standing' | 'fromDefault'
 
-export function getPlayerStartingRating(player: Player) {
-  return getInitialRating(player)
-}
-
 export function buildStandings(data: AppData) {
   const ratings = new Map<string, number>()
   const standings = new Map<string, PlayerStanding>()
@@ -96,52 +92,6 @@ export function buildStandings(data: AppData) {
     standings: [...standings.values()].sort((a, b) => b.rating - a.rating),
     summaries: summaries.reverse(),
   }
-}
-
-export function buildPlayerWeekPoints(playerId: string, summaries: MatchSummary[]) {
-  const weeks = new Map<string, PlayerWeekPoint>()
-  const chronological = [...summaries].reverse()
-
-  chronological.forEach((match) => {
-    const team = match.teamA.includes(playerId)
-      ? 'A'
-      : match.teamB.includes(playerId)
-        ? 'B'
-        : null
-    if (!team) return
-
-    const key = match.playedOn
-    const existing = weeks.get(key) ?? {
-      key,
-      label: match.week.replace(/^Results\s+/, ''),
-      playedOn: match.playedOn,
-      change: 0,
-      cumulative: 0,
-      games: 0,
-      wins: 0,
-      losses: 0,
-      pointsFor: 0,
-      pointsAgainst: 0,
-    }
-
-    const won = match.winner === team
-    const change = team === 'A' ? match.teamADelta : match.teamBDelta
-    existing.change = roundRating(existing.change + change)
-    existing.games += 1
-    existing.wins += won ? 1 : 0
-    existing.losses += won ? 0 : 1
-    existing.pointsFor += team === 'A' ? match.scoreA : match.scoreB
-    existing.pointsAgainst += team === 'A' ? match.scoreB : match.scoreA
-    weeks.set(key, existing)
-  })
-
-  let cumulative = 0
-  return [...weeks.values()]
-    .sort((a, b) => a.playedOn.localeCompare(b.playedOn))
-    .map((week) => {
-      cumulative = roundRating(cumulative + week.change)
-      return { ...week, cumulative }
-    })
 }
 
 export function buildPlayerRatingWeeks(

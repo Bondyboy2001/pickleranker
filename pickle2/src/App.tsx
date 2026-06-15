@@ -1,15 +1,26 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { AdminPage } from './components/AdminPage'
 import { AppFooter, AppHeader } from './components/AppShell'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { NoticeBanner } from './components/NoticeBanner'
 import { OverallLeaderboard } from './components/OverallLeaderboard'
-import { PlayersPanel } from './components/PlayersPanel'
-import { RatingExplainer } from './components/RatingExplainer'
-import { WeeklyView } from './components/WeeklyView'
+
+// Code-split the admin tools and the non-default tabs so the initial (public,
+// overall-leaderboard) load doesn't ship them. Each chunk loads on first view.
+const AdminPage = lazy(() =>
+  import('./components/AdminPage').then((m) => ({ default: m.AdminPage })),
+)
+const PlayersPanel = lazy(() =>
+  import('./components/PlayersPanel').then((m) => ({ default: m.PlayersPanel })),
+)
+const RatingExplainer = lazy(() =>
+  import('./components/RatingExplainer').then((m) => ({ default: m.RatingExplainer })),
+)
+const WeeklyView = lazy(() =>
+  import('./components/WeeklyView').then((m) => ({ default: m.WeeklyView })),
+)
 import {
   checkIsAdmin,
   exportDataSnapshot,
@@ -300,9 +311,8 @@ function App() {
   )
   const filteredStandings = useMemo(() => {
     const query = search.trim().toLowerCase()
-    let rows = sortedStandings
-    if (!query) return rows
-    return rows.filter((player) => player.name.toLowerCase().includes(query))
+    if (!query) return sortedStandings
+    return sortedStandings.filter((player) => player.name.toLowerCase().includes(query))
   }, [search, sortedStandings])
   const sortedWeeklyStandings = useMemo(
     () => sortWeeklyStandings(weeklyStandings, weeklySort.key, weeklySort.direction),
@@ -731,6 +741,7 @@ function App() {
       ) : null}
 
       <div id="main-content">
+        <Suspense fallback={<div className="load-banner">Loading…</div>}>
         {isAdminPage ? (
           <AdminPage
             authForm={authForm}
@@ -831,6 +842,7 @@ function App() {
             )}
           </div>
         )}
+        </Suspense>
       </div>
 
       {!isAdminPage ? <AppFooter /> : null}
