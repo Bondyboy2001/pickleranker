@@ -116,7 +116,7 @@ function OverallLeaderboardBase({
           <table className="leaderboard-table">
             <thead>
               <tr>
-                <SortableHeader label="#" sortKey="rank" activeSort={sort} onSort={onToggleSort} />
+                <SortableHeader label="Rank" sortKey="rank" activeSort={sort} onSort={onToggleSort} />
                 <SortableHeader
                   label="Player"
                   sortKey="player"

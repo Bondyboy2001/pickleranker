@@ -123,7 +123,7 @@ function WeeklyViewBase({
                   title="Current doubles rating"
                 />
                 <SortableHeader
-                  label="Weekly +/-"
+                  label="4DR +/-"
                   sortKey="weeklyChange"
                   activeSort={weeklySort}
                   onSort={onToggleWeeklySort}
@@ -169,7 +169,7 @@ function WeeklyViewBase({
                       </span>
                     </td>
                     <td className="rating-cell">{formatRating(player.rating)}</td>
-                    <td data-label="Weekly +/-">
+                    <td data-label="4DR +/-">
                       <span className={movementClass(player.change)}>
                         {player.change >= 0 ? '+' : ''}
                         {player.change.toFixed(3)}
