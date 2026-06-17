@@ -20,7 +20,8 @@ import { AdminField } from './AdminField'
 import { DatePicker } from './DatePicker'
 import { PlayerPickerDialog } from './PlayerPickerDialog'
 import { ScoreInput } from './ScoreInput'
-import { ThemedSelect, type ThemedSelectOption } from './ThemedSelect'
+import { type ThemedSelectOption } from './ThemedSelect'
+import { PlayerSlotSelect } from './PlayerSlotSelect'
 import { formatPlayedOnDate, formatResultsLabel, makeId } from '../lib/data'
 import { loadRemoteTournament, saveRemoteTournament } from '../lib/tournamentStorage'
 import {
@@ -271,12 +272,11 @@ function PlayerSlot({
     )
   }
   return (
-    <ThemedSelect
-      className={`tournament-player-select${playerId ? '' : ' empty'}`}
+    <PlayerSlotSelect
+      className={playerId ? '' : 'empty'}
       value={playerId}
       options={options}
       onChange={onChange}
-      ariaLabel="Change player"
       placeholder="Missing player"
     />
   )

@@ -3978,18 +3978,48 @@ select:focus {
   background: var(--danger);
 }
 
-.tournament-player-select.empty .themed-select-trigger {
+.tournament-player-select {
+  min-width: 0;
+}
+
+.player-slot-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.player-slot-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.player-slot-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+/* A missing player (removed, seat not yet refilled) gets a red fill. */
+.player-slot-combobox.empty .player-slot-input {
   border-color: var(--danger);
   background: var(--danger);
   color: var(--surface);
 }
 
-.tournament-player-select.empty .themed-select-chevron {
-  color: var(--surface);
+.player-slot-combobox.empty .player-slot-input::placeholder {
+  color: rgb(255 255 255 / 90%);
 }
 
-.tournament-player-select {
-  min-width: 0;
+.themed-select-option.empty-result {
+  cursor: default;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .tournament-player-select .themed-select-trigger {
