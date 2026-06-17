@@ -485,9 +485,11 @@ function TournamentRoundView({
 export function TournamentPanel({
   standings,
   saveRoundMatches,
+  onFinished,
 }: {
   standings: PlayerStanding[]
   saveRoundMatches: (matches: Match[]) => Promise<boolean>
+  onFinished?: () => void
 }) {
   const [tournament, setTournament] = useState<TournamentState | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -782,6 +784,8 @@ export function TournamentPanel({
     setTournament(null)
     setSelectedIds([])
     setActiveRoundIndex(0)
+    setEditLineups(false)
+    onFinished?.()
   }
 
   // Grey out / restore a whole game (a "Game N" row across every court) — e.g.

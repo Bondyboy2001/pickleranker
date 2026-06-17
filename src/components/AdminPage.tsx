@@ -243,7 +243,11 @@ export function AdminPage({
       ) : null}
 
       {canEdit && adminTab === 'tournament' ? (
-        <TournamentPanel standings={standings} saveRoundMatches={saveTournamentRound} />
+        <TournamentPanel
+          standings={standings}
+          saveRoundMatches={saveTournamentRound}
+          onFinished={() => setAdminTab('recent')}
+        />
       ) : null}
 
       {canEdit && adminTab === 'games' ? (
