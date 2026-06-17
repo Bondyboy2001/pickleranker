@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
@@ -59,6 +59,16 @@ function WeeklyViewBase({
 }: WeeklyViewProps) {
   const weeklyDetailRef = useRef<HTMLElement | null>(null)
 
+  // The week's biggest climber. Only shown when no search filter is active, so it
+  // always reflects the whole field rather than a filtered subset.
+  const biggestMover = useMemo(() => {
+    if (weeklySearch.trim()) return null
+    return filteredWeeklyStandings.reduce<WeeklyStanding | null>(
+      (best, player) => (!best || player.change > best.change ? player : best),
+      null,
+    )
+  }, [filteredWeeklyStandings, weeklySearch])
+
   function selectWeeklyPlayer(playerId: string) {
     onSelectPlayer(playerId)
     // Only scroll when the detail panel stacks below the table (≤1080px). On wider
@@ -97,6 +107,23 @@ function WeeklyViewBase({
           </select>
         </div>
       </section>
+
+      {biggestMover && biggestMover.change > 0 ? (
+        <button
+          type="button"
+          className="weekly-mover"
+          onClick={() => selectWeeklyPlayer(biggestMover.playerId)}
+        >
+          <span className="weekly-mover-flame" aria-hidden>
+            🔥
+          </span>
+          <span className="weekly-mover-text">
+            <span className="weekly-mover-label">Biggest mover this week</span>
+            <strong>{biggestMover.name}</strong>
+          </span>
+          <span className="weekly-mover-change">+{biggestMover.change.toFixed(3)}</span>
+        </button>
+      ) : null}
 
       <section className="panel weekly-panel weekly-table-panel">
         <div className="table-wrap">
@@ -300,6 +327,21 @@ function WeeklyPlayerDetail({
 
 function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const cardRef = useRef<HTMLElement>(null)
+
+  const toggleDetails = () => {
+    setDetailsOpen((open) => {
+      const next = !open
+      if (next) {
+        // Scroll the whole card into view (score header included), not just the
+        // details, so the entire breakdown is visible after expanding.
+        requestAnimationFrame(() => {
+          cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }
+      return next
+    })
+  }
   const teamAIsWinner = game.winner === 'A'
   const winnerTeam = teamAIsWinner ? game.teamA : game.teamB
   const loserTeam = teamAIsWinner ? game.teamB : game.teamA
@@ -316,7 +358,7 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
   const scoreLabel = `${game.scoreA}-${game.scoreB}`
 
   return (
-    <article className="weekly-game-card">
+    <article ref={cardRef} className="weekly-game-card" style={{ scrollMarginTop: 16 }}>
       <div className="game-card-top">
         <div>
           <span className="eyebrow">Game #{game.gameNumber}</span>
@@ -346,7 +388,7 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
       <button
         type="button"
         className="weekly-details-toggle"
-        onClick={() => setDetailsOpen((open) => !open)}
+        onClick={toggleDetails}
         aria-expanded={detailsOpen}
       >
         {detailsOpen ? 'Hide rating details' : 'Show rating details'}
@@ -354,7 +396,7 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
       </button>
 
       {detailsOpen ? (
-        <>
+        <div className="weekly-details-body">
           <div className="game-stat-grid">
             <div>
               <span>Winners avg 4DR</span>
@@ -384,20 +426,20 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
               <thead>
                 <tr>
                   <th />
-                  <th>4DR</th>
-                  <th>Score</th>
-                  <th>Total</th>
+                  <th scope="col">4DR</th>
+                  <th scope="col">Score</th>
+                  <th scope="col">Total</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <th>Winners</th>
+                  <th scope="row">Winners</th>
                   <td className="positive">{formatSignedPoints(game.baseDelta)}</td>
                   <td className="positive">{formatSignedPoints(marginBonus)}</td>
                   <td className="positive">{formatSignedPoints(winnerDelta)}</td>
                 </tr>
                 <tr>
-                  <th>Losers</th>
+                  <th scope="row">Losers</th>
                   <td className="negative">{formatSignedPoints(-game.baseDelta)}</td>
                   <td className="positive">{formatSignedPoints(loserPointBonus)}</td>
                   <td className={loserDelta >= 0 ? 'positive' : 'negative'}>
@@ -412,10 +454,10 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
             <table className="player-breakdown">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Start</th>
-                  <th>+/-</th>
-                  <th>Finish</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Start</th>
+                  <th scope="col">+/-</th>
+                  <th scope="col">Finish</th>
                 </tr>
               </thead>
               <tbody>
@@ -441,7 +483,7 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       ) : null}
     </article>
   )

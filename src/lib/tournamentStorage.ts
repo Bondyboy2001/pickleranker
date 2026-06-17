@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 const TOURNAMENT_STORAGE_KEY = 'pickleranker-tournament-v1'
 const TOURNAMENT_DRAFT_ID = 'default'
 
-export function loadLocalTournament(): TournamentState | null {
+function loadLocalTournament(): TournamentState | null {
   if (typeof localStorage === 'undefined') return null
   const stored = localStorage.getItem(TOURNAMENT_STORAGE_KEY)
   if (!stored) return null
@@ -15,7 +15,7 @@ export function loadLocalTournament(): TournamentState | null {
   }
 }
 
-export function saveLocalTournament(tournament: TournamentState | null) {
+function saveLocalTournament(tournament: TournamentState | null) {
   if (typeof localStorage === 'undefined') return
   if (tournament) {
     localStorage.setItem(TOURNAMENT_STORAGE_KEY, JSON.stringify(tournament))

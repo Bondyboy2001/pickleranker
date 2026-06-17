@@ -79,15 +79,36 @@
   box-sizing: border-box;
 }
 
+/* Theme swaps fade every surface, border and text colour together so dark <-> light
+   transitions smoothly instead of flashing mismatched rows. */
+*,
+*::before,
+*::after {
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    color 200ms ease,
+    fill 240ms ease,
+    stroke 240ms ease;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
   /* Page now reads edge-to-edge on the surface colour (no grey gutter framing a
      floating card); keep a soft accent glow at the very top for warmth. */
-  background:
-    radial-gradient(circle at top, var(--accent-tint), transparent 520px),
-    var(--surface);
+  background-color: var(--surface);
+  background-image: radial-gradient(circle at top, var(--accent-tint), transparent 520px);
+  transition: background-color 240ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 button,

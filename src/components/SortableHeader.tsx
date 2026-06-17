@@ -16,6 +16,7 @@ export function SortableHeader<T extends string>({
   const isActive = activeSort.key === sortKey
   return (
     <th
+      scope="col"
       aria-sort={isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button

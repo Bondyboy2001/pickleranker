@@ -6,6 +6,7 @@ import {
   DEFAULT_RATING,
 } from '../lib/standings'
 import { formatRating } from '../lib/scoring'
+import { buildPublicRoute } from '../lib/routing'
 import type { AppData, Match, PlayerStanding, PlayerWeekPoint, SortDirection } from '../lib/types'
 
 type MatchupStat = {
@@ -14,6 +15,14 @@ type MatchupStat = {
   wins: number
   losses: number
   games: number
+}
+
+type PartnerStat = {
+  playerId: string
+  name: string
+  wins: number
+  games: number
+  rate: number
 }
 
 type HeadToHeadStats = {
@@ -79,6 +88,7 @@ function HistorySortableHeader({
   const isActive = activeSort.key === sortKey
   return (
     <th
+      scope="col"
       aria-sort={isActive ? (activeSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button
@@ -147,6 +157,78 @@ function buildMatchupStats(playerId: string, data: AppData) {
   )[0]
 
   return { friend, foe }
+}
+
+function chronologicalPlayerResults(playerId: string, matches: Match[]) {
+  return matches
+    .filter((match) => getPlayerTeam(match, playerId))
+    .sort((a, b) => a.playedOn.localeCompare(b.playedOn) || a.id.localeCompare(b.id))
+    .map((match) => {
+      const team = getPlayerTeam(match, playerId)
+      const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
+      return won ? 'W' : ('L' as 'W' | 'L')
+    })
+}
+
+function buildPlayerForm(playerId: string, matches: Match[]) {
+  const results = chronologicalPlayerResults(playerId, matches)
+  const recent = results.slice(-5)
+
+  let streak = 0
+  let streakType: 'W' | 'L' | null = null
+  for (let i = results.length - 1; i >= 0; i -= 1) {
+    if (streakType === null) {
+      streakType = results[i]
+      streak = 1
+    } else if (results[i] === streakType) {
+      streak += 1
+    } else {
+      break
+    }
+  }
+
+  return { recent, streak, streakType }
+}
+
+function buildBestPartner(playerId: string, data: AppData): PartnerStat | null {
+  const playerNames = new Map(data.players.map((player) => [player.id, player.name]))
+  const partners = new Map<string, { wins: number; games: number }>()
+
+  data.matches.forEach((match) => {
+    const team = getPlayerTeam(match, playerId)
+    if (!team) return
+    const teammates = team === 'A' ? match.teamA : match.teamB
+    const partnerId = teammates.find((id) => id !== playerId)
+    if (!partnerId) return
+
+    const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
+    const entry = partners.get(partnerId) ?? { wins: 0, games: 0 }
+    entry.games += 1
+    entry.wins += won ? 1 : 0
+    partners.set(partnerId, entry)
+  })
+
+  let best: PartnerStat | null = null
+  partners.forEach((entry, partnerId) => {
+    if (entry.games < 2) return
+    const rate = entry.wins / entry.games
+    if (
+      !best ||
+      rate > best.rate ||
+      (rate === best.rate && entry.wins > best.wins) ||
+      (rate === best.rate && entry.wins === best.wins && entry.games > best.games)
+    ) {
+      best = {
+        playerId: partnerId,
+        name: playerNames.get(partnerId) ?? 'Unknown',
+        wins: entry.wins,
+        games: entry.games,
+        rate,
+      }
+    }
+  })
+
+  return best
 }
 
 function buildHeadToHeadStats(playerAId: string, playerBId: string, matches: Match[]) {
@@ -226,7 +308,10 @@ function PlayerProfileDetail({
 }) {
   const stats = useMemo(() => buildProfileStats(player, weeks), [player, weeks])
   const matchups = useMemo(() => buildMatchupStats(player.id, data), [player.id, data])
+  const form = useMemo(() => buildPlayerForm(player.id, data.matches), [player.id, data.matches])
+  const bestPartner = useMemo(() => buildBestPartner(player.id, data), [player.id, data])
   const [historySort, setHistorySort] = useState<HistorySort>({ key: 'week', direction: 'desc' })
+  const [shareLabel, setShareLabel] = useState('Share')
   const history = useMemo(() => sortPlayerHistory(weeks, historySort), [weeks, historySort])
 
   function toggleHistorySort(key: HistorySortKey) {
@@ -234,6 +319,24 @@ function PlayerProfileDetail({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
     }))
+  }
+
+  async function sharePlayer() {
+    const url = `${window.location.origin}${window.location.pathname}${buildPublicRoute('players', {
+      playerId: player.id,
+    })}`
+    const shareData = { title: `${player.name} · DL Cardiff Pickleball`, url }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      setShareLabel('Link copied!')
+      window.setTimeout(() => setShareLabel('Share'), 2000)
+    } catch {
+      // User dismissed the share sheet, or clipboard was blocked — leave the label as-is.
+    }
   }
 
   return (
@@ -254,8 +357,34 @@ function PlayerProfileDetail({
         <div className="players-profile-rating">
           <span>Leaderboard 4DR</span>
           <strong>{formatRating(stats.officialRating)}</strong>
+          <button type="button" className="players-share-button" onClick={sharePlayer}>
+            {shareLabel}
+          </button>
         </div>
       </div>
+
+      {form.recent.length > 0 ? (
+        <div className="players-form-row">
+          <span className="players-form-label">Recent form</span>
+          <div className="players-form-pills" aria-label={`Last ${form.recent.length} results`}>
+            {form.recent.map((result, index) => (
+              <span
+                key={index}
+                className={`players-form-pill ${result === 'W' ? 'win' : 'loss'}`}
+                title={result === 'W' ? 'Win' : 'Loss'}
+              >
+                {result}
+              </span>
+            ))}
+          </div>
+          {form.streakType ? (
+            <span className={`players-form-streak ${form.streakType === 'W' ? 'win' : 'loss'}`}>
+              {form.streak} {form.streakType === 'W' ? 'win' : 'loss'}
+              {form.streak === 1 ? '' : form.streakType === 'W' ? 's' : 'es'} in a row
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="players-stat-grid">
         <div>
@@ -296,6 +425,16 @@ function PlayerProfileDetail({
           {matchups.friend ? (
             <small>
               {matchups.friend.wins}-{matchups.friend.losses} against them
+            </small>
+          ) : null}
+        </div>
+        <div>
+          <span>Best partner</span>
+          <strong>{bestPartner?.name ?? '—'}</strong>
+          {bestPartner ? (
+            <small>
+              {formatWinRate(bestPartner.wins, bestPartner.games)} together ({bestPartner.wins}-
+              {bestPartner.games - bestPartner.wins})
             </small>
           ) : null}
         </div>

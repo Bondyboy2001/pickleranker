@@ -12,8 +12,10 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { AdminField, FieldInput, FieldInputWrap } from './AdminField'
-import { PlayerSearchAdd } from './PlayerSearchAdd'
+import { AdminField, FieldInput } from './AdminField'
+import { DatePicker } from './DatePicker'
+import { PlayerPickerDialog } from './PlayerPickerDialog'
+import { ScoreInput } from './ScoreInput'
 import { formatPlayedOnDate, formatResultsLabel, makeId } from '../lib/data'
 import { loadRemoteTournament, saveRemoteTournament } from '../lib/tournamentStorage'
 import {
@@ -227,43 +229,35 @@ function TournamentRoundView({
                         <span className="tournament-court-badge">Court {court.court}</span>
                         {parseGameScores(game) ? <span className="tournament-score-status">Done</span> : null}
                       </div>
-                      <div className="tournament-match-body">
-                        <div className="tournament-match-team home">
+                      <div className="tournament-match-body pickleball-court">
+                        <div className="tournament-match-team court-team court-team-top">
                           <span>{nameOf(game.teamA[0])}</span>
                           <span>{nameOf(game.teamA[1])}</span>
                         </div>
-                        <div className="tournament-match-scores">
-                          <FieldInputWrap className="tournament-score-input">
-                            <input
-                              type="number"
-                              min="0"
-                              inputMode="numeric"
-                              placeholder="–"
-                              readOnly={readOnly}
-                              aria-label={`Court ${court.court} game ${gameIndex + 1} first team score`}
-                              value={game.scoreA}
-                              onChange={(event) =>
-                                onUpdateScore(courtIndex, gameIndex, 'scoreA', event.target.value)
-                              }
-                            />
-                          </FieldInputWrap>
-                          <span className="tournament-score-vs">vs</span>
-                          <FieldInputWrap className="tournament-score-input">
-                            <input
-                              type="number"
-                              min="0"
-                              inputMode="numeric"
-                              placeholder="–"
-                              readOnly={readOnly}
-                              aria-label={`Court ${court.court} game ${gameIndex + 1} second team score`}
-                              value={game.scoreB}
-                              onChange={(event) =>
-                                onUpdateScore(courtIndex, gameIndex, 'scoreB', event.target.value)
-                              }
-                            />
-                          </FieldInputWrap>
+                        <div className="court-net-zone" aria-label="Scores">
+                          <ScoreInput
+                            className="tournament-score-input court-score court-score-top"
+                            readOnly={readOnly}
+                            ariaLabel={`Court ${court.court} game ${gameIndex + 1} top pair score`}
+                            value={game.scoreA}
+                            onChange={(value) =>
+                              onUpdateScore(courtIndex, gameIndex, 'scoreA', value)
+                            }
+                          />
+                          <span className="court-net" aria-hidden>
+                            Net
+                          </span>
+                          <ScoreInput
+                            className="tournament-score-input court-score court-score-bottom"
+                            readOnly={readOnly}
+                            ariaLabel={`Court ${court.court} game ${gameIndex + 1} bottom pair score`}
+                            value={game.scoreB}
+                            onChange={(value) =>
+                              onUpdateScore(courtIndex, gameIndex, 'scoreB', value)
+                            }
+                          />
                         </div>
-                        <div className="tournament-match-team away">
+                        <div className="tournament-match-team court-team court-team-bottom">
                           <span>{nameOf(game.teamB[0])}</span>
                           <span>{nameOf(game.teamB[1])}</span>
                         </div>
@@ -319,6 +313,7 @@ export function TournamentPanel({
   const [saving, setSaving] = useState(false)
   const [activeRoundIndex, setActiveRoundIndex] = useState(0)
   const [tournamentLoaded, setTournamentLoaded] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -351,13 +346,22 @@ export function TournamentPanel({
     [selectedIds, standings],
   )
 
-  function addPlayer(playerId: string) {
+  function togglePlayer(playerId: string) {
     setFormError('')
-    setSelectedIds((current) => (current.includes(playerId) ? current : [...current, playerId]))
+    setSelectedIds((current) =>
+      current.includes(playerId)
+        ? current.filter((id) => id !== playerId)
+        : [...current, playerId],
+    )
   }
 
   function removePlayer(playerId: string) {
     setSelectedIds((current) => current.filter((id) => id !== playerId))
+  }
+
+  function clearPlayers() {
+    setFormError('')
+    setSelectedIds([])
   }
 
   function startTournament() {
@@ -469,11 +473,7 @@ export function TournamentPanel({
 
         <div className="tournament-setup-grid">
           <AdminField label="Date">
-            <FieldInput
-              type="date"
-              value={playedOn}
-              onChange={(event) => setPlayedOn(event.target.value)}
-            />
+            <DatePicker value={playedOn} onChange={(value) => setPlayedOn(value)} />
           </AdminField>
           <div className="tournament-stat-pills">
             <span className="tournament-stat-pill">
@@ -492,11 +492,61 @@ export function TournamentPanel({
           </div>
         </div>
 
-        <PlayerSearchAdd
+        <div className="tournament-roster">
+          <div className="tournament-roster-head">
+            <span className="tournament-roster-title">Players</span>
+            <div className="tournament-roster-actions">
+              {selectedIds.length > 0 ? (
+                <button type="button" className="ghost-button" onClick={clearPlayers}>
+                  <RotateCcw size={15} />
+                  Clear all
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setPickerOpen(true)}
+              >
+                <Users size={16} />
+                Add players
+              </button>
+            </div>
+          </div>
+
+          {selectedIds.length > 0 ? (
+            <div className="selected-player-chips" role="list" aria-label="Selected players">
+              {selectedIds.map((playerId) => (
+                <span key={playerId} className="player-chip" role="listitem">
+                  <span>{nameOf(playerId)}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Remove ${nameOf(playerId)}`}
+                    onClick={() => removePlayer(playerId)}
+                  >
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="tournament-roster-empty"
+              onClick={() => setPickerOpen(true)}
+            >
+              No players yet — tap “Add players” to build the roster.
+            </button>
+          )}
+        </div>
+
+        <PlayerPickerDialog
+          open={pickerOpen}
           players={standings}
           selectedIds={selectedIds}
-          onAdd={addPlayer}
-          onRemove={removePlayer}
+          onToggle={togglePlayer}
+          onClear={clearPlayers}
+          onClose={() => setPickerOpen(false)}
         />
 
         {formError ? <p className="form-error">{formError}</p> : null}

@@ -60,8 +60,10 @@ files — no server runtime. Config lives in `netlify.toml`.
    Netlify site settings (Environment variables).
 2. Deploy from the repo root: `netlify deploy --build --prod`.
 
-## Verify scoring
+## Tests
+
+The 4DR scoring engine and standings are covered by unit tests:
 
 ```bash
-npm run verify:scoring
+npm test
 ```

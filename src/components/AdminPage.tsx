@@ -14,7 +14,9 @@ import {
   Upload,
 } from 'lucide-react'
 import { AdminField, FieldInput } from './AdminField'
+import { DatePicker } from './DatePicker'
 import { PlayerAutocomplete } from './PlayerAutocomplete'
+import { ScoreInput } from './ScoreInput'
 import { TournamentPanel } from './TournamentPanel'
 import type { AppData, Match, MatchFormState, PlayerStanding } from '../lib/types'
 import type { Session } from '@supabase/supabase-js'
@@ -170,7 +172,7 @@ export function AdminPage({
                   onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })}
                 />
               </AdminField>
-              {authError ? <p className="form-error">{authError}</p> : null}
+              {authError ? <p className="form-error" role="alert">{authError}</p> : null}
               <button type="submit" className="primary-button">
                 <LogIn size={16} />
                 Sign in
@@ -254,11 +256,10 @@ export function AdminPage({
             </div>
             <form className="game-entry-form" onSubmit={saveMatch}>
               <AdminField label="Date">
-                <FieldInput
-                  type="date"
+                <DatePicker
                   required
                   value={matchForm.playedOn}
-                  onChange={(event) => updateMatchForm({ playedOn: event.target.value })}
+                  onChange={(value) => updateMatchForm({ playedOn: value })}
                 />
               </AdminField>
 
@@ -297,25 +298,21 @@ export function AdminPage({
 
               <div className="score-inputs">
                 <AdminField label="Pair 1 score">
-                  <FieldInput
+                  <ScoreInput
                     id="match-score-a"
-                    type="number"
-                    min="0"
                     value={matchForm.scoreA}
-                    onChange={(event) => updateMatchForm({ scoreA: event.target.value })}
+                    onChange={(value) => updateMatchForm({ scoreA: value })}
                   />
                 </AdminField>
                 <AdminField label="Pair 2 score">
-                  <FieldInput
-                    type="number"
-                    min="0"
+                  <ScoreInput
                     value={matchForm.scoreB}
-                    onChange={(event) => updateMatchForm({ scoreB: event.target.value })}
+                    onChange={(value) => updateMatchForm({ scoreB: value })}
                   />
                 </AdminField>
               </div>
 
-              {matchError ? <p className="form-error">{matchError}</p> : null}
+              {matchError ? <p className="form-error" role="alert">{matchError}</p> : null}
               <div className="form-actions">
                 <button
                   type="submit"
@@ -428,11 +425,11 @@ export function AdminPage({
                           <table className="recent-games-table">
                             <thead>
                               <tr>
-                                <th>Winners</th>
-                                <th>Losers</th>
-                                <th>Score</th>
-                                <th>Edited</th>
-                                <th style={{ textAlign: 'right' }}>Actions</th>
+                                <th scope="col">Winners</th>
+                                <th scope="col">Losers</th>
+                                <th scope="col">Score</th>
+                                <th scope="col">Edited</th>
+                                <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
                               </tr>
                             </thead>
                             <tbody>

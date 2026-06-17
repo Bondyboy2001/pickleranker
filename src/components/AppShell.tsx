@@ -81,6 +81,11 @@ function AppHeaderBase({
             View public site
           </a>
         )}
+        {!isAdminPage ? (
+          <a className="ghost-link admin-link header-admin-link" href={buildAdminRoute()}>
+            Admin
+          </a>
+        ) : null}
         <button
           type="button"
           className="theme-toggle"
@@ -100,9 +105,6 @@ export const AppFooter = memo(function AppFooter() {
   return (
     <footer className="app-footer">
       <p>David Lloyd Cardiff Pickleball · 4DR leaderboard</p>
-      <a className="footer-admin-link" href={buildAdminRoute()}>
-        Score entry
-      </a>
     </footer>
   )
 })
