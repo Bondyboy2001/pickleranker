@@ -673,7 +673,19 @@ function App() {
           return false
         }
       }
-      const { error } = await supabase.from('matches').insert(newMatches.map(matchToDb))
+      const rows = newMatches.map(matchToDb)
+      let { error } = await supabase.from('matches').insert(rows)
+      // The round/court columns are optional (older DBs may not have them yet).
+      // If they're missing, retry without that metadata so saving still works.
+      if (error && /round|court/i.test(error.message)) {
+        const stripped = rows.map((row) => {
+          const copy = { ...row }
+          delete copy.round
+          delete copy.court
+          return copy
+        })
+        ;({ error } = await supabase.from('matches').insert(stripped))
+      }
       if (error) {
         setNotice(error.message)
         return false

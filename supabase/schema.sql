@@ -15,6 +15,8 @@ create table if not exists public.matches (
   team_b2 text not null references public.players(id) on delete restrict,
   score_a integer not null check (score_a >= 0),
   score_b integer not null check (score_b >= 0),
+  round integer,
+  court integer,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (score_a <> score_b),

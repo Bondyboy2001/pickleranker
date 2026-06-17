@@ -786,6 +786,8 @@ export function TournamentPanel({
               teamB: winnerIsA ? game.teamB : game.teamA,
               scoreA: winnerIsA ? scores.scoreA : scores.scoreB,
               scoreB: winnerIsA ? scores.scoreB : scores.scoreA,
+              round: round.round,
+              court: court.court,
             },
           ]
         }),
@@ -799,8 +801,15 @@ export function TournamentPanel({
 
     setSaving(true)
     const saved = await saveRoundMatches(matches)
+    if (!saved) {
+      setSaving(false)
+      return
+    }
+    // Delete the saved draft now. The debounced auto-save would be cancelled
+    // when this panel unmounts (onFinished switches tabs), leaving the old
+    // bracket to reload — so clear it explicitly to blank the tournament page.
+    await saveRemoteTournament(null)
     setSaving(false)
-    if (!saved) return
 
     setTournament(null)
     setSelectedIds([])

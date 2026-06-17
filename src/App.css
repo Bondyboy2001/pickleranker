@@ -1031,6 +1031,18 @@ th {
   border-bottom: 2px solid var(--border-strong);
 }
 
+.recent-games-table .recent-round-row th {
+  padding: 10px 16px;
+  text-align: left;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
 .leaderboard-table td,
 .weekly-table td,
 .recent-games-table tbody td {

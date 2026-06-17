@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   ChevronDown,
@@ -22,6 +22,25 @@ import type { AppData, Match, MatchFormState, PlayerStanding } from '../lib/type
 import type { Session } from '@supabase/supabase-js'
 
 const ADMIN_USERNAME = 'ben'
+
+// Group a tournament's games by round (ascending), courts ordered 1→4 within
+// each round. Games without round/court info (older saves) fall into round 0,
+// shown last without a round header.
+function groupMatchesByRound(matches: Match[]) {
+  const byRound = new Map<number, Match[]>()
+  matches.forEach((match) => {
+    const round = match.round ?? 0
+    const list = byRound.get(round) ?? []
+    list.push(match)
+    byRound.set(round, list)
+  })
+  return [...byRound.entries()]
+    .sort((a, b) => (a[0] || Infinity) - (b[0] || Infinity))
+    .map(([round, games]) => ({
+      round,
+      games: [...games].sort((a, b) => (a.court ?? 0) - (b.court ?? 0)),
+    }))
+}
 
 function formatMatchEditedAt(match: Match) {
   if (!match.updatedAt) return null
@@ -429,6 +448,7 @@ export function AdminPage({
                           <table className="recent-games-table">
                             <thead>
                               <tr>
+                                <th scope="col">Court</th>
                                 <th scope="col">Winners</th>
                                 <th scope="col">Losers</th>
                                 <th scope="col">Score</th>
@@ -437,52 +457,62 @@ export function AdminPage({
                               </tr>
                             </thead>
                             <tbody>
-                              {matches.map((match) => {
-                                const editedAt = formatMatchEditedAt(match)
-                                return (
-                                  <tr
-                                    key={match.id}
-                                    className={editingMatchId === match.id ? 'editing' : ''}
-                                  >
-                                    <td>
-                                      {playerNameById.get(match.teamA[0]) ?? '?'} &amp;{' '}
-                                      {playerNameById.get(match.teamA[1]) ?? '?'}
-                                    </td>
-                                    <td>
-                                      {playerNameById.get(match.teamB[0]) ?? '?'} &amp;{' '}
-                                      {playerNameById.get(match.teamB[1]) ?? '?'}
-                                    </td>
-                                    <td>
-                                      <span className="score-badge">
-                                        {match.scoreA}-{match.scoreB}
-                                      </span>
-                                    </td>
-                                    <td className="match-edited-at">
-                                      {editedAt ?? '—'}
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                      <div className="recent-match-actions">
-                                        <button
-                                          type="button"
-                                          className="icon-button"
-                                          aria-label="Edit game"
-                                          onClick={() => editRecentMatch(match)}
-                                        >
-                                          <Pencil size={16} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="icon-button danger"
-                                          aria-label="Delete game"
-                                          onClick={() => requestDeleteMatch(match.id)}
-                                        >
-                                          <Trash2 size={16} />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
+                              {groupMatchesByRound(matches).map(({ round, games }) => (
+                                <Fragment key={round}>
+                                  {round > 0 ? (
+                                    <tr className="recent-round-row">
+                                      <th scope="rowgroup" colSpan={6}>
+                                        Round {round}
+                                      </th>
+                                    </tr>
+                                  ) : null}
+                                  {games.map((match) => {
+                                    const editedAt = formatMatchEditedAt(match)
+                                    return (
+                                      <tr
+                                        key={match.id}
+                                        className={editingMatchId === match.id ? 'editing' : ''}
+                                      >
+                                        <td>{match.court ? `Court ${match.court}` : '—'}</td>
+                                        <td>
+                                          {playerNameById.get(match.teamA[0]) ?? '?'} &amp;{' '}
+                                          {playerNameById.get(match.teamA[1]) ?? '?'}
+                                        </td>
+                                        <td>
+                                          {playerNameById.get(match.teamB[0]) ?? '?'} &amp;{' '}
+                                          {playerNameById.get(match.teamB[1]) ?? '?'}
+                                        </td>
+                                        <td>
+                                          <span className="score-badge">
+                                            {match.scoreA}-{match.scoreB}
+                                          </span>
+                                        </td>
+                                        <td className="match-edited-at">{editedAt ?? '—'}</td>
+                                        <td style={{ textAlign: 'right' }}>
+                                          <div className="recent-match-actions">
+                                            <button
+                                              type="button"
+                                              className="icon-button"
+                                              aria-label="Edit game"
+                                              onClick={() => editRecentMatch(match)}
+                                            >
+                                              <Pencil size={16} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="icon-button danger"
+                                              aria-label="Delete game"
+                                              onClick={() => requestDeleteMatch(match.id)}
+                                            >
+                                              <Trash2 size={16} />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </Fragment>
+                              ))}
                             </tbody>
                           </table>
                         </div>

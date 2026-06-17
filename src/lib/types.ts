@@ -15,6 +15,10 @@ export type Match = {
   scoreB: number
   imported?: boolean
   updatedAt?: string
+  // Tournament position (1-based), when the match came from a tournament. Lets
+  // the results view group games by round and court.
+  round?: number
+  court?: number
 }
 
 export type WeeklySnapshot = {
@@ -121,6 +125,8 @@ export type DbMatch = {
   score_a: number
   score_b: number
   updated_at?: string
+  round?: number
+  court?: number
 }
 
 export type MatchFormState = {

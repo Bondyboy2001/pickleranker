@@ -161,6 +161,8 @@ export function matchToDb(match: Match): DbMatch {
     score_a: match.scoreA,
     score_b: match.scoreB,
     ...(match.updatedAt ? { updated_at: match.updatedAt } : {}),
+    ...(match.round != null ? { round: match.round } : {}),
+    ...(match.court != null ? { court: match.court } : {}),
   }
 }
 
@@ -174,6 +176,8 @@ function dbToMatch(match: DbMatch): Match {
     scoreA: match.score_a,
     scoreB: match.score_b,
     ...(match.updated_at ? { updatedAt: match.updated_at } : {}),
+    ...(match.round != null ? { round: match.round } : {}),
+    ...(match.court != null ? { court: match.court } : {}),
   }
 }
 
