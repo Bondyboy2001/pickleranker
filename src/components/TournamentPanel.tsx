@@ -12,6 +12,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Trash2,
   Trophy,
   Users,
   X,
@@ -295,6 +296,7 @@ function TournamentRoundView({
   playerOptions,
   onUpdateScore,
   onUpdatePlayer,
+  onRemoveGame,
 }: {
   round: TournamentRound
   readOnly: boolean
@@ -315,6 +317,7 @@ function TournamentRoundView({
     slot: 0 | 1,
     playerId: string,
   ) => void
+  onRemoveGame: (gameIndex: number) => void
 }) {
   const gameCount = Math.max(...round.courts.map((court) => court.games.length))
   const roundComplete = isRoundComplete(round)
@@ -338,9 +341,22 @@ function TournamentRoundView({
                     <p>Everyone plays this game.</p>
                   )}
                 </div>
-                <span className="tournament-game-progress">
-                  {scoredCount}/{round.courts.length} scored
-                </span>
+                <div className="tournament-game-head-end">
+                  <span className="tournament-game-progress">
+                    {scoredCount}/{round.courts.length} scored
+                  </span>
+                  {!readOnly && gameCount > 1 ? (
+                    <button
+                      type="button"
+                      className="tournament-game-remove"
+                      onClick={() => onRemoveGame(gameIndex)}
+                      aria-label={`Remove game ${gameIndex + 1}`}
+                      title="Remove this game (not enough time)"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  ) : null}
+                </div>
               </header>
 
               <div className="tournament-game-courts">
@@ -701,35 +717,38 @@ export function TournamentPanel({
     setFormError('')
   }
 
-  // Commit the whole tournament to the leaderboard in one go, then clear it.
+  // Commit the tournament to the leaderboard, then clear it. Games that were
+  // never scored (ran out of time) or still have a missing player are simply
+  // skipped — only completed games are saved.
   async function finishTournament() {
     if (!tournament) return
-    const incomplete = tournament.rounds.find((round) => !isRoundComplete(round))
-    if (incomplete) {
-      setFormError(
-        `Round ${incomplete.round} still has unscored games — fill every score before finishing.`,
-      )
-      setActiveRoundIndex(tournament.rounds.indexOf(incomplete))
-      return
-    }
 
     const matches: Match[] = tournament.rounds.flatMap((round) =>
       round.courts.flatMap((court) =>
-        court.games.map((game) => {
-          const scores = parseGameScores(game)!
+        court.games.flatMap((game) => {
+          const scores = parseGameScores(game)
+          if (!scores) return []
+          if ([...game.teamA, ...game.teamB].some((id) => !id)) return []
           const winnerIsA = scores.scoreA > scores.scoreB
-          return {
-            id: makeId('m'),
-            week: formatResultsLabel(tournament.playedOn),
-            playedOn: tournament.playedOn,
-            teamA: winnerIsA ? game.teamA : game.teamB,
-            teamB: winnerIsA ? game.teamB : game.teamA,
-            scoreA: winnerIsA ? scores.scoreA : scores.scoreB,
-            scoreB: winnerIsA ? scores.scoreB : scores.scoreA,
-          }
+          return [
+            {
+              id: makeId('m'),
+              week: formatResultsLabel(tournament.playedOn),
+              playedOn: tournament.playedOn,
+              teamA: winnerIsA ? game.teamA : game.teamB,
+              teamB: winnerIsA ? game.teamB : game.teamA,
+              scoreA: winnerIsA ? scores.scoreA : scores.scoreB,
+              scoreB: winnerIsA ? scores.scoreB : scores.scoreA,
+            },
+          ]
         }),
       ),
     )
+
+    if (matches.length === 0) {
+      setFormError('Enter at least one game score before finishing (or “End tournament” to discard).')
+      return
+    }
 
     setSaving(true)
     const saved = await saveRoundMatches(matches)
@@ -739,6 +758,36 @@ export function TournamentPanel({
     setTournament(null)
     setSelectedIds([])
     setActiveRoundIndex(0)
+  }
+
+  // Remove a whole game (a "Game N" row across every court) — e.g. when there
+  // isn't enough time to play it.
+  function removeGame(gameIndex: number) {
+    if (!tournament) return
+    const round = tournament.rounds[activeRoundIndex]
+    if (!round || round.courts.every((court) => court.games.length <= 1)) return
+    if (!window.confirm(`Remove Game ${gameIndex + 1} from Round ${round.round} on every court?`)) {
+      return
+    }
+    setFormError('')
+    setDraftSavedAt(null)
+    setTournament((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        rounds: current.rounds.map((entry, index) =>
+          index === activeRoundIndex
+            ? {
+                ...entry,
+                courts: entry.courts.map((court) => ({
+                  ...court,
+                  games: court.games.filter((_, gIndex) => gIndex !== gameIndex),
+                })),
+              }
+            : entry,
+        ),
+      }
+    })
   }
 
   function cancelTournament() {
@@ -866,7 +915,6 @@ export function TournamentPanel({
   const activeRound = tournament.rounds[activeRoundIndex]
   const isCurrentRound = activeRoundIndex === latestRoundIndex
   const roundDone = isRoundComplete(activeRound)
-  const allRoundsComplete = tournament.rounds.every(isRoundComplete)
   const roundHasEmptySlot = (round: TournamentRound) =>
     round.courts.some((court) =>
       court.games.some((game) => [...game.teamA, ...game.teamB].some((id) => !id)),
@@ -963,6 +1011,7 @@ export function TournamentPanel({
         onUpdatePlayer={(courtIndex, gameIndex, team, slot, value) =>
           updatePlayer(activeRoundIndex, courtIndex, gameIndex, team, slot, value)
         }
+        onRemoveGame={removeGame}
       />
 
       {formError ? <p className="form-error">{formError}</p> : null}
@@ -997,10 +1046,10 @@ export function TournamentPanel({
               type="button"
               className="ghost-button"
               onClick={finishTournament}
-              disabled={!allRoundsComplete || saving || anyRoundHasGap}
+              disabled={saving}
             >
               <Flag size={16} />
-              {saving ? 'Saving…' : 'Finish & save to leaderboard'}
+              {saving ? 'Saving…' : 'Finish Tournament'}
             </button>
           </>
         ) : null}

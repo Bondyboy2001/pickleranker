@@ -3878,6 +3878,31 @@ select:focus {
   color: var(--muted);
 }
 
+.tournament-game-head-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tournament-game-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tournament-game-remove:hover {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .tournament-game-courts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
