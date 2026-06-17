@@ -3092,7 +3092,14 @@ select:focus {
   color: var(--surface);
 }
 
-.tournament-round-tab.saved:not(.active) {
+/* A fully-scored round is filled green; the active round stays the darker
+   accent-strong so you can still tell which one you're viewing. */
+.tournament-round-tab.complete:not(.active) {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.tournament-round-tab.saved:not(.active):not(.complete) {
   color: var(--accent-strong);
 }
 

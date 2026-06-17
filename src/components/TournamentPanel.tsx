@@ -64,23 +64,27 @@ function RoundTab({
   round,
   isActive,
   isSaved,
+  isComplete,
   onSelect,
 }: {
   round: number
   isActive: boolean
   isSaved: boolean
+  isComplete: boolean
   onSelect: () => void
 }) {
   return (
     <button
       type="button"
-      className={`tournament-round-tab${isActive ? ' active' : ''}${isSaved ? ' saved' : ''}`}
+      className={`tournament-round-tab${isActive ? ' active' : ''}${isSaved ? ' saved' : ''}${
+        isComplete ? ' complete' : ''
+      }`}
       onClick={onSelect}
       aria-selected={isActive}
       role="tab"
     >
       Round {round}
-      {isSaved ? <Check size={14} aria-hidden /> : null}
+      {isComplete ? <Check size={14} aria-hidden /> : null}
     </button>
   )
 }
@@ -913,6 +917,7 @@ export function TournamentPanel({
             round={round.round}
             isActive={index === activeRoundIndex}
             isSaved={index < latestRoundIndex}
+            isComplete={isRoundComplete(round)}
             onSelect={() => setActiveRoundIndex(index)}
           />
         ))}
