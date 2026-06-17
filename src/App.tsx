@@ -655,18 +655,22 @@ function App() {
   async function saveTournamentRound(newMatches: Match[]) {
     if (!requireAdmin()) return false
 
+    const message = `${newMatches.length} tournament games saved to the leaderboard.`
+
     if (supabase) {
       const { error } = await supabase.from('matches').insert(newMatches.map(matchToDb))
       if (error) {
         setNotice(error.message)
         return false
       }
+      // Re-pull authoritative data so the leaderboard, weekly and players views
+      // (and the local cache) all reflect the new results — not just an
+      // optimistic in-memory merge that a reload would lose.
+      await refreshRemoteData(message)
+      return true
     }
 
-    applyData(
-      { ...data, matches: [...data.matches, ...newMatches] },
-      `${newMatches.length} tournament games saved to the leaderboard.`,
-    )
+    applyData({ ...data, matches: [...data.matches, ...newMatches] }, message)
     return true
   }
 

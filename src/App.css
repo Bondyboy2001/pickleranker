@@ -3092,11 +3092,11 @@ select:focus {
   color: var(--surface);
 }
 
-/* A fully-scored round is filled green; the active round stays the darker
-   accent-strong so you can still tell which one you're viewing. */
+/* A fully-scored round gets a light-green fill; the active round stays the
+   darker accent-strong so you can still tell which one you're viewing. */
 .tournament-round-tab.complete:not(.active) {
-  background: var(--accent);
-  color: var(--surface);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .tournament-round-tab.saved:not(.active):not(.complete) {
@@ -3898,9 +3898,17 @@ select:focus {
 }
 
 .tournament-game-remove:hover {
-  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
-  background: var(--danger-soft);
-  color: var(--danger);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* A skipped (greyed-out) game: dim the matches but keep the header/eye button
+   fully interactive so it can be restored. */
+.tournament-game-block.skipped .tournament-game-courts {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: grayscale(0.6);
 }
 
 .tournament-game-courts {

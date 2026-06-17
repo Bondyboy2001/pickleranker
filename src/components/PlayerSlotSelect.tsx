@@ -30,7 +30,6 @@ export function PlayerSlotSelect({
   const [rect, setRect] = useState<Rect | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const listRef = useRef<HTMLUListElement | null>(null)
   const listboxId = useId()
 
   const currentLabel = options.find((option) => option.value === value)?.label ?? ''
@@ -106,7 +105,6 @@ export function PlayerSlotSelect({
       {open && rect
         ? createPortal(
             <ul
-              ref={listRef}
               id={listboxId}
               className="themed-select-menu"
               role="listbox"

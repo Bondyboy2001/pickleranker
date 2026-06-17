@@ -5,6 +5,9 @@ export type TournamentGame = {
   scoreA: string
   scoreB: string
   sitOutIds?: string[]
+  // Greyed out (e.g. not enough time to play). Skipped games are excluded from
+  // completion checks, rankings, and the leaderboard, and can be un-skipped.
+  skipped?: boolean
 }
 
 export type TournamentCourt = {
@@ -287,6 +290,7 @@ function countGameSitOuts(round: TournamentRound, current: Record<string, number
 // provided results map (players not in the map are ignored).
 function tallyGames(games: TournamentGame[], results: Map<string, CourtPlayerResult>) {
   games.forEach((game) => {
+    if (game.skipped) return
     const scores = parseGameScores(game)
     if (!scores) return
     const apply = (playerId: string, scored: number, conceded: number) => {
@@ -346,7 +350,15 @@ export function parseGameScores(game: TournamentGame) {
 }
 
 export function isRoundComplete(round: TournamentRound) {
-  return round.courts.every((court) => court.games.every((game) => parseGameScores(game)))
+  return round.courts.every((court) =>
+    court.games.every((game) => game.skipped || parseGameScores(game)),
+  )
+}
+
+// True when every seat in a game is filled — i.e. no player was removed and
+// left an empty slot. The empty string is the "missing player" sentinel.
+export function gameHasAllPlayers(game: TournamentGame): boolean {
+  return [...game.teamA, ...game.teamB].every((id) => Boolean(id))
 }
 
 // Rank a court's players by wins, then point difference, then seed in the

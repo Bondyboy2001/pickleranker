@@ -4,6 +4,8 @@ import {
   CalendarDays,
   Check,
   Clock,
+  Eye,
+  EyeOff,
   Flag,
   Minus,
   Pause,
@@ -12,7 +14,6 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  Trash2,
   Trophy,
   Users,
   X,
@@ -29,6 +30,7 @@ import {
   buildNextRound,
   courtMovement,
   createTournament,
+  gameHasAllPlayers,
   isRoundComplete,
   parseGameScores,
   rankCourtPlayers,
@@ -296,7 +298,7 @@ function TournamentRoundView({
   playerOptions,
   onUpdateScore,
   onUpdatePlayer,
-  onRemoveGame,
+  onToggleSkipGame,
 }: {
   round: TournamentRound
   readOnly: boolean
@@ -317,7 +319,7 @@ function TournamentRoundView({
     slot: 0 | 1,
     playerId: string,
   ) => void
-  onRemoveGame: (gameIndex: number) => void
+  onToggleSkipGame: (gameIndex: number) => void
 }) {
   const gameCount = Math.max(...round.courts.map((court) => court.games.length))
   const roundComplete = isRoundComplete(round)
@@ -327,13 +329,16 @@ function TournamentRoundView({
       <div className="tournament-game-list">
         {Array.from({ length: gameCount }, (_, gameIndex) => {
           const sitOutIds = round.courts[0]?.games[gameIndex]?.sitOutIds ?? []
+          const skipped = round.courts[0]?.games[gameIndex]?.skipped ?? false
           const scoredCount = round.courts.filter((court) => parseGameScores(court.games[gameIndex])).length
           return (
-            <section className="tournament-game-block" key={gameIndex}>
+            <section className={`tournament-game-block${skipped ? ' skipped' : ''}`} key={gameIndex}>
               <header className="tournament-game-head">
                 <div>
                   <span className="tournament-game-kicker">Game {gameIndex + 1}</span>
-                  {sitOutIds.length > 0 ? (
+                  {skipped ? (
+                    <p>Skipped — not enough time.</p>
+                  ) : sitOutIds.length > 0 ? (
                     <p>
                       Sitting: <strong>{sitOutIds.map(nameOf).join(', ')}</strong>
                     </p>
@@ -343,17 +348,17 @@ function TournamentRoundView({
                 </div>
                 <div className="tournament-game-head-end">
                   <span className="tournament-game-progress">
-                    {scoredCount}/{round.courts.length} scored
+                    {skipped ? 'Skipped' : `${scoredCount}/${round.courts.length} scored`}
                   </span>
-                  {!readOnly && gameCount > 1 ? (
+                  {!readOnly ? (
                     <button
                       type="button"
                       className="tournament-game-remove"
-                      onClick={() => onRemoveGame(gameIndex)}
-                      aria-label={`Remove game ${gameIndex + 1}`}
-                      title="Remove this game (not enough time)"
+                      onClick={() => onToggleSkipGame(gameIndex)}
+                      aria-label={skipped ? `Restore game ${gameIndex + 1}` : `Skip game ${gameIndex + 1}`}
+                      title={skipped ? 'Restore this game' : 'Grey out this game (not enough time)'}
                     >
-                      <Trash2 size={15} />
+                      {skipped ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   ) : null}
                 </div>
@@ -726,9 +731,10 @@ export function TournamentPanel({
     const matches: Match[] = tournament.rounds.flatMap((round) =>
       round.courts.flatMap((court) =>
         court.games.flatMap((game) => {
+          if (game.skipped) return []
           const scores = parseGameScores(game)
           if (!scores) return []
-          if ([...game.teamA, ...game.teamB].some((id) => !id)) return []
+          if (!gameHasAllPlayers(game)) return []
           const winnerIsA = scores.scoreA > scores.scoreB
           return [
             {
@@ -760,15 +766,10 @@ export function TournamentPanel({
     setActiveRoundIndex(0)
   }
 
-  // Remove a whole game (a "Game N" row across every court) — e.g. when there
-  // isn't enough time to play it.
-  function removeGame(gameIndex: number) {
+  // Grey out / restore a whole game (a "Game N" row across every court) — e.g.
+  // when there isn't enough time to play it. Reversible.
+  function toggleGameSkipped(gameIndex: number) {
     if (!tournament) return
-    const round = tournament.rounds[activeRoundIndex]
-    if (!round || round.courts.every((court) => court.games.length <= 1)) return
-    if (!window.confirm(`Remove Game ${gameIndex + 1} from Round ${round.round} on every court?`)) {
-      return
-    }
     setFormError('')
     setDraftSavedAt(null)
     setTournament((current) => {
@@ -781,7 +782,9 @@ export function TournamentPanel({
                 ...entry,
                 courts: entry.courts.map((court) => ({
                   ...court,
-                  games: court.games.filter((_, gIndex) => gIndex !== gameIndex),
+                  games: court.games.map((game, gIndex) =>
+                    gIndex === gameIndex ? { ...game, skipped: !game.skipped } : game,
+                  ),
                 })),
               }
             : entry,
@@ -917,7 +920,7 @@ export function TournamentPanel({
   const roundDone = isRoundComplete(activeRound)
   const roundHasEmptySlot = (round: TournamentRound) =>
     round.courts.some((court) =>
-      court.games.some((game) => [...game.teamA, ...game.teamB].some((id) => !id)),
+      court.games.some((game) => !game.skipped && !gameHasAllPlayers(game)),
     )
   const activeRoundHasGap = roundHasEmptySlot(activeRound)
   const anyRoundHasGap = tournament.rounds.some(roundHasEmptySlot)
@@ -1011,7 +1014,7 @@ export function TournamentPanel({
         onUpdatePlayer={(courtIndex, gameIndex, team, slot, value) =>
           updatePlayer(activeRoundIndex, courtIndex, gameIndex, team, slot, value)
         }
-        onRemoveGame={removeGame}
+        onToggleSkipGame={toggleGameSkipped}
       />
 
       {formError ? <p className="form-error">{formError}</p> : null}
