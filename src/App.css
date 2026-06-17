@@ -22,13 +22,47 @@
 .brand-lockup {
   display: flex;
   align-items: center;
+  gap: 18px;
+}
+
+.header-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--accent-strong);
+}
+
+.header-clock-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.header-clock-text strong {
+  color: var(--text-strong);
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.header-clock-text small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .header-clock {
+    display: none;
+  }
 }
 
 .brand-logo {
   display: block;
-  width: clamp(180px, 22vw, 300px);
-  height: auto;
-  max-height: 78px;
+  width: auto;
+  height: clamp(54px, 8vw, 74px);
+  max-width: 300px;
   object-fit: contain;
   object-position: left center;
 }
@@ -1639,6 +1673,110 @@ select:focus {
   flex: 0 0 auto;
 }
 
+.themed-select {
+  position: relative;
+}
+
+.themed-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font: 600 15px/1.35 Inter, ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.themed-select-trigger:hover {
+  border-color: var(--accent);
+}
+
+.themed-select-trigger:focus-visible,
+.themed-select[data-open='true'] .themed-select-trigger {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.themed-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.themed-select-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+
+.themed-select-trigger[aria-expanded='true'] .themed-select-chevron {
+  transform: rotate(180deg);
+  color: var(--accent-strong);
+}
+
+.themed-select-menu {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  width: max-content;
+  max-width: min(360px, 92vw);
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  outline: none;
+  animation: themed-select-in 0.14s ease;
+}
+
+@keyframes themed-select-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.themed-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.themed-select-option.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.themed-select-option.selected {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.themed-select-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex: 0 0 16px;
+  color: var(--accent-strong);
+}
+
 .weekly-table td,
 .weekly-table th {
   padding-inline: 14px;
@@ -1952,6 +2090,33 @@ select:focus {
   overflow: visible;
 }
 
+.weekly-details-body {
+  display: grid;
+  gap: 18px;
+}
+
+.weekly-details-body .table-wrap {
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface-alt);
+  padding: 4px 16px;
+  overflow: visible;
+}
+
+.weekly-details-body .table-wrap td:last-child,
+.weekly-details-body .table-wrap th:last-child {
+  padding-right: 0;
+}
+
+.weekly-details-body .table-wrap th:first-child {
+  padding-left: 0;
+}
+
+.weekly-details-body .table-wrap tbody tr:last-child th,
+.weekly-details-body .table-wrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .points-breakdown th,
 .points-breakdown td,
 .player-breakdown th,
@@ -2098,8 +2263,9 @@ select:focus {
   }
 
   .brand-logo {
-    width: min(220px, 72vw);
-    max-height: 64px;
+    width: auto;
+    height: 52px;
+    max-width: min(220px, 72vw);
   }
 
   .topbar-actions {
@@ -2607,58 +2773,86 @@ select:focus {
 }
 
 .tournament-timer {
+  --timer-progress: 1;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
+  gap: 24px;
+  padding: 20px 22px 24px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 58%),
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%),
     var(--surface);
   box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
 
 .tournament-timer.running {
-  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), var(--shadow-soft);
 }
 
 .tournament-timer.done {
-  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--danger) 12%, transparent), transparent 62%),
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--danger) 14%, transparent), transparent 55%),
     var(--surface);
+  animation: timer-flash 1.1s ease-in-out infinite;
+}
+
+@keyframes timer-flash {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 24%, transparent), var(--shadow-soft); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 26%, transparent), var(--shadow-soft); }
 }
 
 .tournament-timer-display {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
 }
 
 .tournament-timer-icon {
   display: inline-grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  border-radius: 10px;
-  background: var(--accent-strong);
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, var(--accent), var(--accent-strong));
   color: var(--surface);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.tournament-timer.running .tournament-timer-icon {
+  animation: timer-pulse 2s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
 }
 
 .tournament-timer.done .tournament-timer-icon {
-  background: var(--danger);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--danger) 80%, white), var(--danger));
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--danger) 36%, transparent);
+}
+
+.tournament-timer-readout {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .tournament-timer-label {
   display: block;
   color: var(--muted);
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -2666,8 +2860,10 @@ select:focus {
   display: block;
   margin-top: 2px;
   color: var(--text-strong);
-  font-size: 38px;
+  font-size: 46px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   line-height: 1;
 }
 
@@ -2675,20 +2871,162 @@ select:focus {
   color: var(--danger);
 }
 
-.tournament-timer-controls {
-  display: grid;
-  grid-template-columns: minmax(110px, 140px) auto auto;
-  gap: 10px;
-  align-items: flex-end;
+.tournament-timer-status {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
-.tournament-timer-controls .admin-field {
-  min-width: 0;
+.tournament-timer-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.tournament-timer.running .tournament-timer-status {
+  color: var(--accent-strong);
+}
+
+.tournament-timer.running .tournament-timer-status::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: timer-dot 1.6s ease-out infinite;
+}
+
+@keyframes timer-dot {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 7px transparent; }
+}
+
+.tournament-timer.done .tournament-timer-status {
+  color: var(--danger);
+}
+
+.tournament-timer.done .tournament-timer-status::before {
+  background: var(--danger);
+}
+
+.tournament-timer-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.tournament-timer-minutes {
+  display: grid;
+  gap: 6px;
+}
+
+.tournament-timer-minutes-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tournament-timer-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  padding: 4px;
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tournament-timer-step {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--surface-alt);
+  color: var(--text-strong);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tournament-timer-step:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.tournament-timer-step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tournament-timer-minutes-input {
+  width: 52px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+
+.tournament-timer-minutes-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Hide native number spinners — we use our own +/- buttons. */
+.tournament-timer-minutes-input::-webkit-outer-spin-button,
+.tournament-timer-minutes-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.tournament-timer-minutes-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.tournament-timer-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
 }
 
 .tournament-timer-button {
-  min-height: 44px;
+  height: 48px;
   white-space: nowrap;
+}
+
+.tournament-timer-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.tournament-timer-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--timer-progress));
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: transform 0.3s linear;
+}
+
+.tournament-timer.done .tournament-timer-fill {
+  background: var(--danger);
 }
 
 .tournament-round-tabs {
@@ -2736,6 +3074,15 @@ select:focus {
   border: 1px dashed var(--border-strong);
   border-radius: 10px;
   background: var(--surface-alt);
+}
+
+.tournament-round-hint.editing {
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
 .tournament-sitout-note {
@@ -2870,7 +3217,8 @@ select:focus {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin: 4px 0 16px;
+  padding: 16px 18px;
+  margin: 0;
 }
 .players-form-label {
   font-size: 13px;
@@ -3126,30 +3474,47 @@ select:focus {
 }
 
 .selected-player-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
   gap: 8px;
 }
 
 .player-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px 6px 14px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-alt);
-  font-size: 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 15px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-strong) 5%, transparent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.player-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.player-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 .player-chip .icon-button {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--border);
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--surface-alt);
   color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .player-chip .icon-button:hover {
@@ -3576,6 +3941,40 @@ select:focus {
   word-break: normal;
 }
 
+.tournament-player-select {
+  min-width: 0;
+}
+
+.tournament-player-select .themed-select-trigger {
+  height: 44px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* When editing line-ups, stack each pair into a single full-width column so the
+   player dropdown triggers are wide enough to show full names. */
+.tournament-match.editing-lineups .court-team {
+  grid-template-columns: 1fr;
+}
+
+.tournament-match.editing-lineups .tournament-match-body.pickleball-court {
+  min-height: 0;
+}
+
+.tournament-lineup-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.tournament-lineup-hint {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .court-net-zone {
   display: grid;
   grid-template-rows: auto auto auto;
@@ -3687,11 +4086,33 @@ select:focus {
   color: var(--danger);
 }
 
+.tournament-rank.staying {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.tournament-rank-move {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
 .tournament-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   padding-top: 4px;
+}
+
+.tournament-draft-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 @media (max-width: 680px) {
@@ -3718,7 +4139,24 @@ select:focus {
   }
 
   .tournament-timer-controls {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tournament-timer-minutes {
+    width: 100%;
+  }
+
+  .tournament-timer-stepper {
+    justify-content: space-between;
+  }
+
+  .tournament-timer-actions {
+    width: 100%;
+  }
+
+  .tournament-timer-actions .tournament-timer-button {
+    flex: 1;
   }
 
   .tournament-timer-button {

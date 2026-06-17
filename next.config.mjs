@@ -13,9 +13,9 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Emit a fully static site (HTML/CSS/JS) to `out/` so it can be hosted on any
-  // static host (Netlify). The app is client-rendered and talks to Supabase
-  // directly from the browser, so no server runtime is required.
+  // Emit a fully static site (HTML/CSS/JS) to `out/`. The app is client-rendered
+  // and talks to Supabase directly from the browser, so no server runtime is
+  // required. Vercel auto-detects the Next.js framework and serves this export.
   output: 'export',
   reactStrictMode: true,
   // Static export has no Image Optimization server; serve images as-is.

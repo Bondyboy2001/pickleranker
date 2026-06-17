@@ -5,25 +5,34 @@ import {
   Check,
   Clock,
   Flag,
+  Minus,
   Pause,
   Play,
+  Plus,
+  RefreshCw,
   RotateCcw,
+  Save,
   Trophy,
   Users,
   X,
 } from 'lucide-react'
-import { AdminField, FieldInput } from './AdminField'
+import { AdminField } from './AdminField'
 import { DatePicker } from './DatePicker'
 import { PlayerPickerDialog } from './PlayerPickerDialog'
 import { ScoreInput } from './ScoreInput'
+import { ThemedSelect, type ThemedSelectOption } from './ThemedSelect'
 import { formatPlayedOnDate, formatResultsLabel, makeId } from '../lib/data'
 import { loadRemoteTournament, saveRemoteTournament } from '../lib/tournamentStorage'
 import {
   buildNextRound,
+  courtMovement,
   createTournament,
   isRoundComplete,
   parseGameScores,
   rankCourtPlayers,
+  rebuildRoundsAfter,
+  type CourtMovement,
+  type TournamentGame,
   type TournamentRound,
   type TournamentState,
 } from '../lib/tournament'
@@ -32,6 +41,11 @@ import type { Match, PlayerStanding } from '../lib/types'
 const DEFAULT_TIMER_MINUTES = 12
 const MIN_TIMER_MINUTES = 1
 const MAX_TIMER_MINUTES = 60
+const MOVE_CLASS: Record<CourtMovement, string> = {
+  up: 'moving-up',
+  down: 'moving-down',
+  stays: 'staying',
+}
 
 function durationInputToSeconds(value: string) {
   const minutes = Number(value)
@@ -107,6 +121,14 @@ function TournamentTimer() {
     if (!hasStarted) setRemainingSeconds(seconds)
   }
 
+  function stepMinutes(delta: number) {
+    if (hasStarted) return
+    const current = Math.round(durationInputToSeconds(durationInput) / 60)
+    const next = Math.min(MAX_TIMER_MINUTES, Math.max(MIN_TIMER_MINUTES, current + delta))
+    setDurationInput(String(next))
+    setRemainingSeconds(next * 60)
+  }
+
   function startTimer() {
     if (remainingSeconds <= 0) return
     setHasStarted(true)
@@ -131,65 +153,156 @@ function TournamentTimer() {
   }
 
   const isTimeUp = hasStarted && remainingSeconds === 0
+  const totalSeconds = Math.max(1, durationInputToSeconds(durationInput))
+  const progress = Math.min(1, Math.max(0, remainingSeconds / totalSeconds))
 
   return (
-    <section className={`tournament-timer${isRunning ? ' running' : ''}${isTimeUp ? ' done' : ''}`}>
+    <section
+      className={`tournament-timer${isRunning ? ' running' : ''}${isTimeUp ? ' done' : ''}`}
+      style={{ ['--timer-progress' as string]: progress }}
+    >
       <div className="tournament-timer-display">
         <span className="tournament-timer-icon" aria-hidden>
-          <Clock size={18} />
+          <Clock size={20} />
         </span>
-        <div>
+        <div className="tournament-timer-readout">
           <span className="tournament-timer-label">Round timer</span>
           <strong>{formatTimer(remainingSeconds)}</strong>
+          <span className="tournament-timer-status">
+            {isTimeUp ? "Time's up" : isRunning ? 'Counting down' : hasStarted ? 'Paused' : 'Ready'}
+          </span>
         </div>
       </div>
 
       <div className="tournament-timer-controls">
-        <AdminField label="Minutes">
-          <FieldInput
-            type="number"
-            min={MIN_TIMER_MINUTES}
-            max={MAX_TIMER_MINUTES}
-            step="1"
-            value={durationInput}
-            onChange={(event) => updateDuration(event.target.value)}
-            onBlur={commitDuration}
-            disabled={hasStarted}
-            aria-label="Timer duration in minutes"
-          />
-        </AdminField>
-        <button
-          type="button"
-          className="primary-button tournament-timer-button"
-          onClick={isRunning ? pauseTimer : startTimer}
-          disabled={remainingSeconds <= 0}
-        >
-          {isRunning ? <Pause size={16} /> : <Play size={16} />}
-          {isRunning ? 'Pause' : 'Start'}
-        </button>
-        <button type="button" className="ghost-button tournament-timer-button" onClick={resetTimer}>
-          <RotateCcw size={16} />
-          Reset
-        </button>
+        <div className="tournament-timer-minutes">
+          <span className="tournament-timer-minutes-label">Minutes</span>
+          <div className="tournament-timer-stepper">
+            <button
+              type="button"
+              className="tournament-timer-step"
+              onClick={() => stepMinutes(-1)}
+              disabled={hasStarted || Math.round(totalSeconds / 60) <= MIN_TIMER_MINUTES}
+              aria-label="Decrease minutes"
+            >
+              <Minus size={16} />
+            </button>
+            <input
+              type="number"
+              className="tournament-timer-minutes-input"
+              min={MIN_TIMER_MINUTES}
+              max={MAX_TIMER_MINUTES}
+              step="1"
+              value={durationInput}
+              onChange={(event) => updateDuration(event.target.value)}
+              onBlur={commitDuration}
+              disabled={hasStarted}
+              aria-label="Timer duration in minutes"
+            />
+            <button
+              type="button"
+              className="tournament-timer-step"
+              onClick={() => stepMinutes(1)}
+              disabled={hasStarted || Math.round(totalSeconds / 60) >= MAX_TIMER_MINUTES}
+              aria-label="Increase minutes"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="tournament-timer-actions">
+          <button
+            type="button"
+            className="primary-button tournament-timer-button"
+            onClick={isRunning ? pauseTimer : startTimer}
+            disabled={remainingSeconds <= 0}
+          >
+            {isRunning ? <Pause size={16} /> : <Play size={16} />}
+            {isRunning ? 'Pause' : 'Start'}
+          </button>
+          <button type="button" className="ghost-button tournament-timer-button" onClick={resetTimer}>
+            <RotateCcw size={16} />
+            Reset
+          </button>
+        </div>
       </div>
+
+      <span className="tournament-timer-track" aria-hidden>
+        <span className="tournament-timer-fill" />
+      </span>
     </section>
+  )
+}
+
+// The set of players on a court, in order of first appearance across its games.
+function courtRosterFromGames(games: TournamentGame[]): string[] {
+  const seen = new Set<string>()
+  const ids: string[] = []
+  games.forEach((game) => {
+    ;[...game.teamA, ...game.teamB].forEach((id) => {
+      if (!seen.has(id)) {
+        seen.add(id)
+        ids.push(id)
+      }
+    })
+  })
+  return ids
+}
+
+function PlayerSlot({
+  playerId,
+  editable,
+  nameOf,
+  options,
+  onChange,
+}: {
+  playerId: string
+  editable: boolean
+  nameOf: (playerId: string) => string
+  options: ThemedSelectOption[]
+  onChange: (playerId: string) => void
+}) {
+  if (!editable) return <span>{nameOf(playerId)}</span>
+  return (
+    <ThemedSelect
+      className="tournament-player-select"
+      value={playerId}
+      options={options}
+      onChange={onChange}
+      ariaLabel="Change player"
+    />
   )
 }
 
 function TournamentRoundView({
   round,
   readOnly,
+  editPlayers,
   nameOf,
+  seedOrderIds,
+  playerOptions,
   onUpdateScore,
+  onUpdatePlayer,
 }: {
   round: TournamentRound
   readOnly: boolean
+  editPlayers: boolean
   nameOf: (playerId: string) => string
+  seedOrderIds: string[]
+  playerOptions: ThemedSelectOption[]
   onUpdateScore: (
     courtIndex: number,
     gameIndex: number,
     field: 'scoreA' | 'scoreB',
     value: string,
+  ) => void
+  onUpdatePlayer: (
+    courtIndex: number,
+    gameIndex: number,
+    team: 'teamA' | 'teamB',
+    slot: 0 | 1,
+    playerId: string,
   ) => void
 }) {
   const gameCount = Math.max(...round.courts.map((court) => court.games.length))
@@ -224,15 +337,30 @@ function TournamentRoundView({
                   const game = court.games[gameIndex]
                   if (!game) return null
                   return (
-                    <article className="tournament-match" key={game.id}>
+                    <article
+                      className={`tournament-match${editPlayers ? ' editing-lineups' : ''}`}
+                      key={game.id}
+                    >
                       <div className="tournament-match-top">
                         <span className="tournament-court-badge">Court {court.court}</span>
                         {parseGameScores(game) ? <span className="tournament-score-status">Done</span> : null}
                       </div>
                       <div className="tournament-match-body pickleball-court">
                         <div className="tournament-match-team court-team court-team-top">
-                          <span>{nameOf(game.teamA[0])}</span>
-                          <span>{nameOf(game.teamA[1])}</span>
+                          <PlayerSlot
+                            playerId={game.teamA[0]}
+                            editable={editPlayers}
+                            nameOf={nameOf}
+                            options={playerOptions}
+                            onChange={(value) => onUpdatePlayer(courtIndex, gameIndex, 'teamA', 0, value)}
+                          />
+                          <PlayerSlot
+                            playerId={game.teamA[1]}
+                            editable={editPlayers}
+                            nameOf={nameOf}
+                            options={playerOptions}
+                            onChange={(value) => onUpdatePlayer(courtIndex, gameIndex, 'teamA', 1, value)}
+                          />
                         </div>
                         <div className="court-net-zone" aria-label="Scores">
                           <ScoreInput
@@ -258,8 +386,20 @@ function TournamentRoundView({
                           />
                         </div>
                         <div className="tournament-match-team court-team court-team-bottom">
-                          <span>{nameOf(game.teamB[0])}</span>
-                          <span>{nameOf(game.teamB[1])}</span>
+                          <PlayerSlot
+                            playerId={game.teamB[0]}
+                            editable={editPlayers}
+                            nameOf={nameOf}
+                            options={playerOptions}
+                            onChange={(value) => onUpdatePlayer(courtIndex, gameIndex, 'teamB', 0, value)}
+                          />
+                          <PlayerSlot
+                            playerId={game.teamB[1]}
+                            editable={editPlayers}
+                            nameOf={nameOf}
+                            options={playerOptions}
+                            onChange={(value) => onUpdatePlayer(courtIndex, gameIndex, 'teamB', 1, value)}
+                          />
                         </div>
                       </div>
                     </article>
@@ -274,21 +414,32 @@ function TournamentRoundView({
       {roundComplete ? (
         <section className="tournament-results-grid" aria-label="Round results">
           {round.courts.map((court) => {
-            const ranking = rankCourtPlayers(court)
+            const courtCount = round.courts.length
+            const ranking = rankCourtPlayers(court, seedOrderIds)
             return (
               <article className="tournament-court-results" key={court.court}>
                 <span className="tournament-results-label">Court {court.court} finish</span>
                 <div className="tournament-court-standings">
-                  {ranking.map((result, index) => (
-                    <span
-                      key={result.playerId}
-                      className={index < 2 ? 'tournament-rank moving-up' : 'tournament-rank moving-down'}
-                    >
-                      {index + 1}. {nameOf(result.playerId)} · {result.wins}W ·{' '}
-                      {result.pointDiff >= 0 ? '+' : ''}
-                      {result.pointDiff}
-                    </span>
-                  ))}
+                  {ranking.map((result, index) => {
+                    const move = courtMovement(index, court.court, courtCount)
+                    const moveLabel =
+                      move === 'up'
+                        ? `↑ Court ${court.court - 1}`
+                        : move === 'down'
+                          ? `↓ Court ${court.court + 1}`
+                          : '· Stays'
+                    return (
+                      <span
+                        key={result.playerId}
+                        className={`tournament-rank ${MOVE_CLASS[move]}`}
+                      >
+                        {index + 1}. {nameOf(result.playerId)} · {result.wins}W ·{' '}
+                        {result.pointDiff >= 0 ? '+' : ''}
+                        {result.pointDiff}
+                        <span className="tournament-rank-move">{moveLabel}</span>
+                      </span>
+                    )
+                  })}
                 </div>
               </article>
             )
@@ -314,6 +465,9 @@ export function TournamentPanel({
   const [activeRoundIndex, setActiveRoundIndex] = useState(0)
   const [tournamentLoaded, setTournamentLoaded] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [editLineups, setEditLineups] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -332,7 +486,11 @@ export function TournamentPanel({
 
   useEffect(() => {
     if (!tournamentLoaded) return
-    void saveRemoteTournament(tournament)
+    // Debounce so rapid score edits don't fire a Supabase write per keystroke.
+    const timerId = window.setTimeout(() => {
+      void saveRemoteTournament(tournament)
+    }, 800)
+    return () => window.clearTimeout(timerId)
   }, [tournament, tournamentLoaded])
 
   const playerNameById = useMemo(
@@ -340,6 +498,11 @@ export function TournamentPanel({
     [standings],
   )
   const nameOf = (playerId: string) => playerNameById.get(playerId) ?? 'Unknown'
+
+  const playerOptions = useMemo<ThemedSelectOption[]>(
+    () => standings.map((player) => ({ value: player.id, label: player.name })),
+    [standings],
+  )
 
   const seededSelection = useMemo(
     () => standings.filter((player) => selectedIds.includes(player.id)).map((player) => player.id),
@@ -383,8 +546,9 @@ export function TournamentPanel({
     value: string,
   ) {
     setFormError('')
+    setDraftSavedAt(null)
     setTournament((current) => {
-      if (!current || roundIndex !== current.rounds.length - 1) return current
+      if (!current || !current.rounds[roundIndex]) return current
       const round = current.rounds[roundIndex]
       const courts = round.courts.map((court, cIndex) =>
         cIndex === courtIndex
@@ -405,28 +569,113 @@ export function TournamentPanel({
     })
   }
 
-  async function completeRound(finish: boolean) {
+  // Swap the player in one slot of one match (e.g. when someone leaves and a
+  // substitute takes their place). The court roster is recomputed from its games
+  // and any newly introduced player joins the tournament roster (seeded last).
+  function updatePlayer(
+    roundIndex: number,
+    courtIndex: number,
+    gameIndex: number,
+    team: 'teamA' | 'teamB',
+    slot: 0 | 1,
+    playerId: string,
+  ) {
+    setFormError('')
+    setDraftSavedAt(null)
+    setTournament((current) => {
+      if (!current || !current.rounds[roundIndex]) return current
+      const round = current.rounds[roundIndex]
+      const courts = round.courts.map((court, cIndex) => {
+        if (cIndex !== courtIndex) return court
+        const games = court.games.map((game, gIndex) => {
+          if (gIndex !== gameIndex) return game
+          const pair: [string, string] = [...game[team]]
+          pair[slot] = playerId
+          return { ...game, [team]: pair }
+        })
+        return { ...court, games, playerIds: courtRosterFromGames(games) }
+      })
+      const playerIds = current.playerIds.includes(playerId)
+        ? current.playerIds
+        : [...current.playerIds, playerId]
+      return {
+        ...current,
+        playerIds,
+        rounds: current.rounds.map((entry, index) =>
+          index === roundIndex ? { ...round, courts } : entry,
+        ),
+      }
+    })
+  }
+
+  async function saveProgress() {
+    if (!tournament) return
+    setSavingDraft(true)
+    await saveRemoteTournament(tournament)
+    setSavingDraft(false)
+    setDraftSavedAt(new Date().toISOString())
+  }
+
+  function advanceRound() {
     if (!tournament) return
     const round = tournament.rounds[tournament.rounds.length - 1]
     if (!isRoundComplete(round)) {
       setFormError('Enter a score for every game first (winner and loser scores must differ).')
       return
     }
+    setActiveRoundIndex(tournament.rounds.length)
+    setTournament(buildNextRound(tournament))
+  }
 
-    const matches: Match[] = round.courts.flatMap((court) =>
-      court.games.map((game) => {
-        const scores = parseGameScores(game)!
-        const winnerIsA = scores.scoreA > scores.scoreB
-        return {
-          id: makeId('m'),
-          week: formatResultsLabel(tournament.playedOn),
-          playedOn: tournament.playedOn,
-          teamA: winnerIsA ? game.teamA : game.teamB,
-          teamB: winnerIsA ? game.teamB : game.teamA,
-          scoreA: winnerIsA ? scores.scoreA : scores.scoreB,
-          scoreB: winnerIsA ? scores.scoreB : scores.scoreA,
-        }
-      }),
+  // Re-run promotion/relegation for every round after roundIndex using its
+  // (possibly edited) scores. Clears any scores already entered in those later
+  // rounds, since the court line-ups change.
+  function rebuildFollowing(roundIndex: number) {
+    if (!tournament) return
+    const round = tournament.rounds[roundIndex]
+    if (!isRoundComplete(round)) {
+      setFormError('Finish scoring this round before rebuilding the rounds after it.')
+      return
+    }
+    const laterCount = tournament.rounds.length - roundIndex - 1
+    if (laterCount === 0) return
+    const confirmed = window.confirm(
+      `Rebuild the ${laterCount} round${laterCount === 1 ? '' : 's'} after Round ${round.round} from these scores? Any scores already entered in those later rounds will be cleared.`,
+    )
+    if (!confirmed) return
+    setTournament(rebuildRoundsAfter(tournament, roundIndex))
+    setActiveRoundIndex(roundIndex + 1)
+    setFormError('')
+  }
+
+  // Commit the whole tournament to the leaderboard in one go, then clear it.
+  async function finishTournament() {
+    if (!tournament) return
+    const incomplete = tournament.rounds.find((round) => !isRoundComplete(round))
+    if (incomplete) {
+      setFormError(
+        `Round ${incomplete.round} still has unscored games — fill every score before finishing.`,
+      )
+      setActiveRoundIndex(tournament.rounds.indexOf(incomplete))
+      return
+    }
+
+    const matches: Match[] = tournament.rounds.flatMap((round) =>
+      round.courts.flatMap((court) =>
+        court.games.map((game) => {
+          const scores = parseGameScores(game)!
+          const winnerIsA = scores.scoreA > scores.scoreB
+          return {
+            id: makeId('m'),
+            week: formatResultsLabel(tournament.playedOn),
+            playedOn: tournament.playedOn,
+            teamA: winnerIsA ? game.teamA : game.teamB,
+            teamB: winnerIsA ? game.teamB : game.teamA,
+            scoreA: winnerIsA ? scores.scoreA : scores.scoreB,
+            scoreB: winnerIsA ? scores.scoreB : scores.scoreA,
+          }
+        }),
+      ),
     )
 
     setSaving(true)
@@ -434,14 +683,9 @@ export function TournamentPanel({
     setSaving(false)
     if (!saved) return
 
-    if (finish) {
-      setTournament(null)
-      setSelectedIds([])
-      setActiveRoundIndex(0)
-    } else {
-      setActiveRoundIndex(tournament.rounds.length)
-      setTournament(buildNextRound(tournament))
-    }
+    setTournament(null)
+    setSelectedIds([])
+    setActiveRoundIndex(0)
   }
 
   function cancelTournament() {
@@ -569,6 +813,7 @@ export function TournamentPanel({
   const activeRound = tournament.rounds[activeRoundIndex]
   const isCurrentRound = activeRoundIndex === latestRoundIndex
   const roundDone = isRoundComplete(activeRound)
+  const allRoundsComplete = tournament.rounds.every(isRoundComplete)
   const totalGames = activeRound.courts.reduce((total, court) => total + court.games.length, 0)
   const completedGames = activeRound.courts.reduce(
     (total, court) => total + court.games.filter((game) => parseGameScores(game)).length,
@@ -612,44 +857,91 @@ export function TournamentPanel({
         ))}
       </div>
 
-      {!isCurrentRound ? (
-        <p className="tournament-round-hint saved">Round {activeRound.round} saved — view only.</p>
-      ) : null}
+      <div className="tournament-lineup-bar">
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => setEditLineups((value) => !value)}
+        >
+          <Users size={15} />
+          {editLineups ? 'Done editing line-ups' : 'Edit line-ups'}
+        </button>
+        {editLineups ? (
+          <span className="tournament-lineup-hint">
+            Tap a name to swap in a different player (e.g. if someone leaves).
+          </span>
+        ) : null}
+      </div>
 
       <TournamentRoundView
         round={activeRound}
-        readOnly={!isCurrentRound}
+        readOnly={false}
+        editPlayers={editLineups}
         nameOf={nameOf}
+        seedOrderIds={tournament.playerIds}
+        playerOptions={playerOptions}
         onUpdateScore={(courtIndex, gameIndex, field, value) =>
           updateScore(activeRoundIndex, courtIndex, gameIndex, field, value)
         }
+        onUpdatePlayer={(courtIndex, gameIndex, team, slot, value) =>
+          updatePlayer(activeRoundIndex, courtIndex, gameIndex, team, slot, value)
+        }
       />
 
-      {isCurrentRound ? (
-        <>
-          {formError ? <p className="form-error">{formError}</p> : null}
-          <div className="tournament-actions">
+      {formError ? <p className="form-error">{formError}</p> : null}
+
+      <div className="tournament-actions">
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={saveProgress}
+          disabled={savingDraft || saving}
+        >
+          <Save size={16} />
+          {savingDraft ? 'Saving…' : 'Save progress'}
+        </button>
+        {isCurrentRound ? (
+          <>
             <button
               type="button"
               className="primary-button"
-              onClick={() => completeRound(false)}
+              onClick={advanceRound}
               disabled={!roundDone || saving}
             >
               <ArrowRight size={17} />
-              {saving ? 'Saving…' : 'Save round & next'}
+              Next round
             </button>
             <button
               type="button"
               className="ghost-button"
-              onClick={() => completeRound(true)}
-              disabled={!roundDone || saving}
+              onClick={finishTournament}
+              disabled={!allRoundsComplete || saving}
             >
               <Flag size={16} />
-              Save & finish
+              {saving ? 'Saving…' : 'Finish & save to leaderboard'}
             </button>
-          </div>
-        </>
-      ) : null}
+          </>
+        ) : (
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => rebuildFollowing(activeRoundIndex)}
+            disabled={!roundDone}
+          >
+            <RefreshCw size={16} />
+            Rebuild following rounds
+          </button>
+        )}
+        {draftSavedAt ? (
+          <span className="tournament-draft-saved">
+            <Check size={14} aria-hidden />
+            Progress saved {new Date(draftSavedAt).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </span>
+        ) : null}
+      </div>
     </section>
   )
 }

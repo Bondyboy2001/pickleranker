@@ -2,6 +2,7 @@ import { memo } from 'react'
 import Image from 'next/image'
 import { Moon, Sun } from 'lucide-react'
 import { SyncStatus } from './SyncStatus'
+import { HeaderClock } from './HeaderClock'
 import { buildAdminRoute, buildPublicRoute, type PublicTab } from '../lib/routing'
 
 export const AppHeader = memo(AppHeaderBase)
@@ -49,6 +50,7 @@ function AppHeaderBase({
             priority
           />
         </button>
+        <HeaderClock />
       </div>
       <div className="topbar-actions">
         {!isAdminPage ? (

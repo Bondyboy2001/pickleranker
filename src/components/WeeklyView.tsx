@@ -2,6 +2,7 @@ import { memo, useMemo, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PlayerSearchAutocomplete } from './PlayerAutocomplete'
+import { ThemedSelect } from './ThemedSelect'
 import { SortableHeader } from './SortableHeader'
 import {
   formatGameRating,
@@ -93,18 +94,13 @@ function WeeklyViewBase({
             ariaLabel="Search weekly players"
             className="weekly-search"
           />
-          <select
+          <ThemedSelect
             className="week-select"
             value={activeWeek}
-            onChange={(event) => onWeekChange(event.target.value)}
-            aria-label="Select week"
-          >
-            {weekOptions.map((week) => (
-              <option key={week.key} value={week.key}>
-                {week.label}
-              </option>
-            ))}
-          </select>
+            onChange={onWeekChange}
+            ariaLabel="Select week"
+            options={weekOptions.map((week) => ({ value: week.key, label: week.label }))}
+          />
         </div>
       </section>
 
