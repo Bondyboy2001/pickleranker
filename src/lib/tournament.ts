@@ -355,10 +355,13 @@ export function isRoundComplete(round: TournamentRound) {
   )
 }
 
-// True when every seat in a game is filled — i.e. no player was removed and
-// left an empty slot. The empty string is the "missing player" sentinel.
+// True when a game has four distinct players — no empty seat (the empty string
+// is the "missing player" sentinel) and no player appearing twice. The database
+// rejects any match whose four players aren't all different.
 export function gameHasAllPlayers(game: TournamentGame): boolean {
-  return [...game.teamA, ...game.teamB].every((id) => Boolean(id))
+  const seats = [...game.teamA, ...game.teamB]
+  if (seats.some((id) => !id)) return false
+  return new Set(seats).size === seats.length
 }
 
 // Rank a court's players by wins, then point difference, then seed in the

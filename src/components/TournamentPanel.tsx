@@ -748,6 +748,27 @@ export function TournamentPanel({
   async function finishTournament() {
     if (!tournament) return
 
+    // A scored game must have four distinct players or the leaderboard will
+    // reject it. Point the user at the exact game to fix rather than failing
+    // with a database error.
+    const problems: string[] = []
+    tournament.rounds.forEach((round) => {
+      round.courts.forEach((court) => {
+        court.games.forEach((game, gameIndex) => {
+          if (game.skipped || !parseGameScores(game)) return
+          if (!gameHasAllPlayers(game)) {
+            problems.push(`Round ${round.round} · Court ${court.court} · Game ${gameIndex + 1}`)
+          }
+        })
+      })
+    })
+    if (problems.length > 0) {
+      setFormError(
+        `Fix the line-up (a missing or repeated player) in ${problems.join(', ')} before finishing.`,
+      )
+      return
+    }
+
     const matches: Match[] = tournament.rounds.flatMap((round) =>
       round.courts.flatMap((court) =>
         court.games.flatMap((game) => {
