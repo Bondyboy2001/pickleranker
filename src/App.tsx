@@ -656,21 +656,36 @@ function App() {
     if (!requireAdmin()) return false
 
     const message = `${newMatches.length} tournament games saved to the leaderboard.`
+    // A tournament owns its whole day's results, so replace any matches already
+    // saved for that date. This keeps the leaderboard in sync with the final
+    // bracket (e.g. after swapping a player) instead of stacking stale/duplicate
+    // rows from an earlier save. Imported/seed matches live outside the DB.
+    const playedOnDates = [...new Set(newMatches.map((match) => match.playedOn))]
 
     if (supabase) {
+      if (playedOnDates.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('matches')
+          .delete()
+          .in('played_on', playedOnDates)
+        if (deleteError) {
+          setNotice(deleteError.message)
+          return false
+        }
+      }
       const { error } = await supabase.from('matches').insert(newMatches.map(matchToDb))
       if (error) {
         setNotice(error.message)
         return false
       }
       // Re-pull authoritative data so the leaderboard, weekly and players views
-      // (and the local cache) all reflect the new results — not just an
-      // optimistic in-memory merge that a reload would lose.
+      // (and the local cache) all reflect the new results.
       await refreshRemoteData(message)
       return true
     }
 
-    applyData({ ...data, matches: [...data.matches, ...newMatches] }, message)
+    const kept = data.matches.filter((match) => !playedOnDates.includes(match.playedOn))
+    applyData({ ...data, matches: [...kept, ...newMatches] }, message)
     return true
   }
 
