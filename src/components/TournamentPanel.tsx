@@ -864,7 +864,7 @@ export function TournamentPanel({
           onClick={() => setEditLineups((value) => !value)}
         >
           <Users size={15} />
-          {editLineups ? 'Done editing line-ups' : 'Edit line-ups'}
+          {editLineups ? 'Done editing round' : 'Edit Round'}
         </button>
         {editLineups ? (
           <span className="tournament-lineup-hint">

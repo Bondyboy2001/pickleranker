@@ -86,9 +86,10 @@ function getInitialRoute(): AppRoute {
 
 function App() {
   const initialRoute = getInitialRoute()
-  const [data, setData] = useState<AppData>(() =>
-    isSupabaseConfigured ? { players: [], matches: [] } : loadLocalData(),
-  )
+  // Always seed from the local cache (last server snapshot merged with seed
+  // data) so the leaderboard paints instantly; the remote fetch then revalidates
+  // it in the background.
+  const [data, setData] = useState<AppData>(() => loadLocalData())
   const [route, setRoute] = useState<AppRoute>(initialRoute)
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
     localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light',
@@ -153,7 +154,8 @@ function App() {
       const text = error instanceof Error ? error.message : 'Could not load data.'
       setLoadError(text)
       setLoadState('error')
-      setNotice(text)
+      // We still have cached data on screen, so keep the message low-key.
+      setNotice('Couldn’t reach the server — showing saved data.')
     }
   }, [])
 
@@ -230,7 +232,8 @@ function App() {
         const text = error instanceof Error ? error.message : 'Could not load data.'
         setLoadError(text)
         setLoadState('error')
-        setNotice(text)
+        // The cached leaderboard is already showing, so don't alarm the user.
+        setNotice('Couldn’t reach the server — showing saved data.')
       })
 
     const channel = client
@@ -757,10 +760,10 @@ function App() {
         onLogoLongPress={goToAdminFromLogo}
       />
 
-      {loadState === 'loading' && isSupabaseConfigured ? (
+      {loadState === 'loading' && isSupabaseConfigured && data.players.length === 0 ? (
         <div className="load-banner">Loading leaderboard…</div>
       ) : null}
-      {loadState === 'error' ? (
+      {loadState === 'error' && data.players.length === 0 ? (
         <div className="load-banner error">
           <span>{loadError}</span>
           <button type="button" className="ghost-button" onClick={() => refreshRemoteData()}>

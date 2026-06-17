@@ -3922,8 +3922,8 @@ select:focus {
   align-self: start;
 }
 
-.tournament-match-team span,
-.court-team span {
+.tournament-match-team > span,
+.court-team > span {
   display: flex;
   align-items: center;
   justify-content: center;

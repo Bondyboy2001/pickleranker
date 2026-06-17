@@ -88,6 +88,7 @@ function mergeWithSeedData(data: AppData): AppData {
 }
 
 export function saveLocalData(data: AppData) {
+  if (typeof localStorage === 'undefined') return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
@@ -170,10 +171,14 @@ export async function loadRemoteData(): Promise<AppData> {
   if (playersError) throw playersError
   if (matchesError) throw matchesError
 
-  return mergeWithSeedData({
+  const merged = mergeWithSeedData({
     players: (players as DbPlayer[]).map(dbToPlayer),
     matches: (matches as DbMatch[]).map(dbToMatch),
   })
+  // Cache the latest server data so the next visit paints instantly and we can
+  // fall back to real data (not just seed) when the server is slow/unreachable.
+  saveLocalData(merged)
+  return merged
 }
 
 export async function checkIsAdmin(): Promise<boolean> {
