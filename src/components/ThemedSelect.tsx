@@ -15,6 +15,7 @@ type ThemedSelectProps = {
   onChange: (value: string) => void
   className?: string
   ariaLabel?: string
+  placeholder?: string
 }
 
 type MenuRect = { top: number; left: number; width: number }
@@ -25,6 +26,7 @@ export function ThemedSelect({
   onChange,
   className = '',
   ariaLabel,
+  placeholder = '',
 }: ThemedSelectProps) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -34,7 +36,7 @@ export function ThemedSelect({
   const listboxId = useId()
 
   const selectedIndex = options.findIndex((option) => option.value === value)
-  const selectedLabel = selectedIndex >= 0 ? options[selectedIndex].label : ''
+  const selectedLabel = selectedIndex >= 0 ? options[selectedIndex].label : placeholder
 
   // The menu renders in a portal on <body>, so it escapes any clipped/scrolling
   // ancestor (e.g. the overflow:hidden pickleball-court). Keep it aligned under

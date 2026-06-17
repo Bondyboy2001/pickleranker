@@ -263,14 +263,21 @@ function PlayerSlot({
   options: ThemedSelectOption[]
   onChange: (playerId: string) => void
 }) {
-  if (!editable) return <span className={playerId ? undefined : 'empty'}>{playerId ? nameOf(playerId) : '— empty —'}</span>
+  if (!editable) {
+    return (
+      <span className={playerId ? undefined : 'empty'}>
+        {playerId ? nameOf(playerId) : 'Missing player'}
+      </span>
+    )
+  }
   return (
     <ThemedSelect
-      className="tournament-player-select"
+      className={`tournament-player-select${playerId ? '' : ' empty'}`}
       value={playerId}
       options={options}
       onChange={onChange}
       ariaLabel="Change player"
+      placeholder="Missing player"
     />
   )
 }

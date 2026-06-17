@@ -3968,12 +3968,24 @@ select:focus {
   word-break: normal;
 }
 
+/* A missing player (removed, seat not yet refilled) is flagged with a red fill
+   so empty courts stand out at a glance. */
 .tournament-match-team > span.empty,
 .court-team > span.empty {
-  color: var(--muted);
-  font-weight: 700;
-  border-style: dashed;
-  background: transparent;
+  color: var(--surface);
+  font-weight: 800;
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.tournament-player-select.empty .themed-select-trigger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.tournament-player-select.empty .themed-select-chevron {
+  color: var(--surface);
 }
 
 .tournament-player-select {
