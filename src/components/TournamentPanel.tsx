@@ -1063,7 +1063,8 @@ export function TournamentPanel({
       {formError ? <p className="form-error">{formError}</p> : null}
       {anyRoundHasGap ? (
         <p className="tournament-round-hint editing">
-          A removed player left an empty seat (—). Use “Edit Round” to fill it before moving on.
+          A court has a missing seat (—) or the same player twice. Use “Edit Round” to give every
+          game four different players before moving on.
         </p>
       ) : null}
 
