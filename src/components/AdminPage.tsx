@@ -237,7 +237,7 @@ export function AdminPage({
             className={adminTab === 'recent' ? 'active' : ''}
             onClick={() => setAdminTab('recent')}
           >
-            Recent games
+            Recent tournaments
           </button>
         </div>
       ) : null}
@@ -384,12 +384,12 @@ export function AdminPage({
         <section className="panel recent-games-panel">
           <div className="panel-heading">
             <div>
-              <h2>Recent games</h2>
+              <h2>Recent tournaments</h2>
             </div>
           </div>
           <div className="recent-games-weeks">
             {recentMatches.length === 0 ? (
-              <p className="empty-table">No games saved yet.</p>
+              <p className="empty-table">No tournaments saved yet.</p>
             ) : (
               (() => {
                 const weeks = new Map<string, Match[]>()

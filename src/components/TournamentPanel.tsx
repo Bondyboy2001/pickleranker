@@ -621,9 +621,27 @@ export function TournamentPanel({
         if (cIndex !== courtIndex) return court
         const games = court.games.map((game, gIndex) => {
           if (gIndex !== gameIndex) return game
-          const pair: [string, string] = [...game[team]]
-          pair[slot] = playerId
-          return { ...game, [team]: pair }
+          const teamA: [string, string] = [...game.teamA]
+          const teamB: [string, string] = [...game.teamB]
+          const previous = game[team][slot]
+          // If the chosen player already sits in another seat of this game, swap
+          // them in (move the displaced player to the vacated seat) so the same
+          // player never appears twice — which would double-count their record.
+          if (playerId) {
+            const seats: Array<['teamA' | 'teamB', 0 | 1]> = [
+              ['teamA', 0],
+              ['teamA', 1],
+              ['teamB', 0],
+              ['teamB', 1],
+            ]
+            for (const [t, s] of seats) {
+              if (t === team && s === slot) continue
+              const pair = t === 'teamA' ? teamA : teamB
+              if (pair[s] === playerId) pair[s] = previous
+            }
+          }
+          ;(team === 'teamA' ? teamA : teamB)[slot] = playerId
+          return { ...game, teamA, teamB }
         })
         return { ...court, games, playerIds: courtRosterFromGames(games) }
       })

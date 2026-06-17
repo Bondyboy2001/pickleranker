@@ -18,6 +18,14 @@ export function sortMatches(matches: Match[]) {
   )
 }
 
+// A content fingerprint for a match: same day, same two pairs, same score.
+// Used to drop duplicate committed matches without touching the DB.
+function matchContentKey(match: Match) {
+  const teamA = [...match.teamA].sort().join(',')
+  const teamB = [...match.teamB].sort().join(',')
+  return `${match.playedOn}|${teamA}|${teamB}|${match.scoreA}-${match.scoreB}`
+}
+
 export function loadLocalData(): AppData {
   if (typeof localStorage === 'undefined') return mergeWithSeedData(EMPTY_DATA)
   const stored = localStorage.getItem(STORAGE_KEY)
@@ -71,12 +79,22 @@ function mergeWithSeedData(data: AppData): AppData {
   const matches = new Map<string, Match>()
 
   seededData.matches.forEach((match) => matches.set(match.id, match))
+  // Drop duplicate live matches with identical content. Each tournament round
+  // used to save to the leaderboard separately; a tournament also finished via
+  // "Finish Tournament" then committed the same games again, leaving rows with
+  // the same teams/score/date. Two genuine games never share an identical
+  // ordered pairing + score on the same day (partner rotation differs), so this
+  // collapses only true duplicates.
+  const seenContent = new Set<string>()
   data.matches.forEach((match) => {
     const seededMatch = seededImportedMatchesById.get(match.id)
     if (seededMatch) {
       matches.set(match.id, seededMatch)
       return
     }
+    const key = matchContentKey(match)
+    if (seenContent.has(key)) return
+    seenContent.add(key)
     matches.set(match.id, match)
   })
 
