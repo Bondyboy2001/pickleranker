@@ -2768,6 +2768,13 @@ select:focus {
   gap: 10px;
 }
 
+.tournament-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
 .tournament-cancel {
   margin-left: auto;
 }
@@ -3003,7 +3010,27 @@ select:focus {
 
 .tournament-timer-button {
   height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 16px;
   white-space: nowrap;
+}
+
+/* Reset reads as a softer, filled control (not a thin outline) so it sits as a
+   peer to the stepper and the Start button. */
+.tournament-timer .ghost-button.tournament-timer-button {
+  border-color: transparent;
+  background: var(--surface-alt);
+  color: var(--text-strong);
+}
+
+.tournament-timer .ghost-button.tournament-timer-button:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-alt));
+  color: var(--accent-strong);
+}
+
+.tournament-timer .primary-button.tournament-timer-button {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .tournament-timer-track {
@@ -3941,6 +3968,14 @@ select:focus {
   word-break: normal;
 }
 
+.tournament-match-team > span.empty,
+.court-team > span.empty {
+  color: var(--muted);
+  font-weight: 700;
+  border-style: dashed;
+  background: transparent;
+}
+
 .tournament-player-select {
   min-width: 0;
 }
@@ -3973,6 +4008,10 @@ select:focus {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+}
+
+.tournament-lineup-rebuild {
+  margin-left: auto;
 }
 
 .court-net-zone {

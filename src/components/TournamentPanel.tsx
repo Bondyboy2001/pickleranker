@@ -241,7 +241,7 @@ function courtRosterFromGames(games: TournamentGame[]): string[] {
   const ids: string[] = []
   games.forEach((game) => {
     ;[...game.teamA, ...game.teamB].forEach((id) => {
-      if (!seen.has(id)) {
+      if (id && !seen.has(id)) {
         seen.add(id)
         ids.push(id)
       }
@@ -263,7 +263,7 @@ function PlayerSlot({
   options: ThemedSelectOption[]
   onChange: (playerId: string) => void
 }) {
-  if (!editable) return <span>{nameOf(playerId)}</span>
+  if (!editable) return <span className={playerId ? undefined : 'empty'}>{playerId ? nameOf(playerId) : '— empty —'}</span>
   return (
     <ThemedSelect
       className="tournament-player-select"
@@ -608,6 +608,48 @@ export function TournamentPanel({
     })
   }
 
+  // Add a player to the tournament roster, or remove one. Removing a player who
+  // is in matches leaves an empty seat (shown as "—") for you to fill via "Edit
+  // Round"; you can't advance or finish while a seat is empty.
+  function toggleTournamentPlayer(playerId: string) {
+    if (!tournament) return
+    setFormError('')
+    setDraftSavedAt(null)
+    const inRoster = tournament.playerIds.includes(playerId)
+    if (!inRoster) {
+      setTournament((current) =>
+        current ? { ...current, playerIds: [...current.playerIds, playerId] } : current,
+      )
+      return
+    }
+
+    const blankSlot = (id: string) => (id === playerId ? '' : id)
+    setTournament((current) => {
+      if (!current) return current
+      const satOutCounts = { ...current.satOutCounts }
+      delete satOutCounts[playerId]
+      return {
+        ...current,
+        playerIds: current.playerIds.filter((id) => id !== playerId),
+        satOutCounts,
+        rounds: current.rounds.map((round) => ({
+          ...round,
+          sitOutIds: round.sitOutIds.filter((id) => id !== playerId),
+          courts: round.courts.map((court) => ({
+            ...court,
+            playerIds: court.playerIds.filter((id) => id !== playerId),
+            games: court.games.map((game) => ({
+              ...game,
+              teamA: [blankSlot(game.teamA[0]), blankSlot(game.teamA[1])] as [string, string],
+              teamB: [blankSlot(game.teamB[0]), blankSlot(game.teamB[1])] as [string, string],
+              sitOutIds: game.sitOutIds?.filter((id) => id !== playerId),
+            })),
+          })),
+        })),
+      }
+    })
+  }
+
   async function saveProgress() {
     if (!tournament) return
     setSavingDraft(true)
@@ -814,6 +856,12 @@ export function TournamentPanel({
   const isCurrentRound = activeRoundIndex === latestRoundIndex
   const roundDone = isRoundComplete(activeRound)
   const allRoundsComplete = tournament.rounds.every(isRoundComplete)
+  const roundHasEmptySlot = (round: TournamentRound) =>
+    round.courts.some((court) =>
+      court.games.some((game) => [...game.teamA, ...game.teamB].some((id) => !id)),
+    )
+  const activeRoundHasGap = roundHasEmptySlot(activeRound)
+  const anyRoundHasGap = tournament.rounds.some(roundHasEmptySlot)
   const totalGames = activeRound.courts.reduce((total, court) => total + court.games.length, 0)
   const completedGames = activeRound.courts.reduce(
     (total, court) => total + court.games.filter((game) => parseGameScores(game)).length,
@@ -837,10 +885,16 @@ export function TournamentPanel({
             {completedGames}/{totalGames} scores
           </span>
         </div>
-        <button type="button" className="ghost-button tournament-cancel" onClick={cancelTournament}>
-          <X size={16} />
-          End tournament
-        </button>
+        <div className="tournament-toolbar-actions">
+          <button type="button" className="ghost-button" onClick={() => setPickerOpen(true)}>
+            <Users size={16} />
+            Manage players
+          </button>
+          <button type="button" className="ghost-button tournament-cancel" onClick={cancelTournament}>
+            <X size={16} />
+            End tournament
+          </button>
+        </div>
       </div>
 
       <TournamentTimer />
@@ -864,12 +918,23 @@ export function TournamentPanel({
           onClick={() => setEditLineups((value) => !value)}
         >
           <Users size={15} />
-          {editLineups ? 'Done editing round' : 'Edit Round'}
+          {editLineups ? 'Finish Editing' : 'Edit Round'}
         </button>
         {editLineups ? (
           <span className="tournament-lineup-hint">
             Tap a name to swap in a different player (e.g. if someone leaves).
           </span>
+        ) : null}
+        {editLineups && !isCurrentRound ? (
+          <button
+            type="button"
+            className="primary-button tournament-lineup-rebuild"
+            onClick={() => rebuildFollowing(activeRoundIndex)}
+            disabled={!roundDone}
+          >
+            <RefreshCw size={16} />
+            Rebuild
+          </button>
         ) : null}
       </div>
 
@@ -889,6 +954,11 @@ export function TournamentPanel({
       />
 
       {formError ? <p className="form-error">{formError}</p> : null}
+      {anyRoundHasGap ? (
+        <p className="tournament-round-hint editing">
+          A removed player left an empty seat (—). Use “Edit Round” to fill it before moving on.
+        </p>
+      ) : null}
 
       <div className="tournament-actions">
         <button
@@ -906,7 +976,7 @@ export function TournamentPanel({
               type="button"
               className="primary-button"
               onClick={advanceRound}
-              disabled={!roundDone || saving}
+              disabled={!roundDone || saving || activeRoundHasGap}
             >
               <ArrowRight size={17} />
               Next round
@@ -915,23 +985,13 @@ export function TournamentPanel({
               type="button"
               className="ghost-button"
               onClick={finishTournament}
-              disabled={!allRoundsComplete || saving}
+              disabled={!allRoundsComplete || saving || anyRoundHasGap}
             >
               <Flag size={16} />
               {saving ? 'Saving…' : 'Finish & save to leaderboard'}
             </button>
           </>
-        ) : (
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => rebuildFollowing(activeRoundIndex)}
-            disabled={!roundDone}
-          >
-            <RefreshCw size={16} />
-            Rebuild following rounds
-          </button>
-        )}
+        ) : null}
         {draftSavedAt ? (
           <span className="tournament-draft-saved">
             <Check size={14} aria-hidden />
@@ -942,6 +1002,15 @@ export function TournamentPanel({
           </span>
         ) : null}
       </div>
+
+      <PlayerPickerDialog
+        open={pickerOpen}
+        players={standings}
+        selectedIds={tournament.playerIds}
+        onToggle={toggleTournamentPlayer}
+        onClear={() => setFormError('Remove players one at a time so the matches stay intact.')}
+        onClose={() => setPickerOpen(false)}
+      />
     </section>
   )
 }

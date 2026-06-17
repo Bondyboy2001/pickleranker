@@ -169,7 +169,7 @@ export function PlayerPickerDialog({
               Clear all
             </button>
             <button type="button" className="primary-button" onClick={onClose}>
-              Done
+              Save
             </button>
           </div>
         </div>
