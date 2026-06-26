@@ -1,3 +1,5 @@
+import type { Match } from './types'
+
 export type TournamentGame = {
   id: string
   teamA: [string, string]
@@ -19,7 +21,14 @@ export type TournamentCourt = {
 export type TournamentRound = {
   round: number
   courts: TournamentCourt[]
+  // Players resting for the whole round (the field size isn't a multiple of
+  // four). They sit every game of the round so each court stays a fixed four.
   sitOutIds: string[]
+  // The full ladder order (all players, strongest first) used to seed this
+  // round. Kept so the next round can hold a sit-out player at their ladder
+  // position instead of treating a rest as a promotion or relegation. Optional
+  // for backward compatibility with rounds rebuilt from saved match rows.
+  order?: string[]
 }
 
 export type TournamentState = {
@@ -186,16 +195,6 @@ function createEmptyCourts(courtCount: number): TournamentCourt[] {
   }))
 }
 
-function addCourtPlayers(court: TournamentCourt, playerIds: string[]) {
-  const existing = new Set(court.playerIds)
-  playerIds.forEach((playerId) => {
-    if (!existing.has(playerId)) {
-      court.playerIds.push(playerId)
-      existing.add(playerId)
-    }
-  })
-}
-
 function buildRound(
   round: number,
   seededPlayerIds: string[],
@@ -203,29 +202,31 @@ function buildRound(
   random: () => number,
   existingPartnerHistory: Set<string> = new Set(),
 ): TournamentRound {
-  const courtCount = Math.floor(seededPlayerIds.length / PLAYERS_PER_COURT)
+  // Rest one set of players for the whole round so every court is a fixed four
+  // and the king-of-the-court ladder between rounds stays well-defined. (Rotating
+  // a different sit-out each game would shuffle players between courts mid-round
+  // and break the per-court promotion/relegation.)
   const sitOutCount = seededPlayerIds.length % PLAYERS_PER_COURT
+  const sitOutIds = chooseGameSitOuts(
+    seededPlayerIds,
+    sitOutCount,
+    satOutCounts,
+    new Set<string>(),
+    random,
+  )
+
+  const activePlayerIds = seededPlayerIds.filter((playerId) => !sitOutIds.includes(playerId))
+  const courtCount = Math.floor(activePlayerIds.length / PLAYERS_PER_COURT)
   const courts = createEmptyCourts(courtCount)
-  const usedSitOuts = new Set<string>()
   const roundPartnerHistory = new Set<string>()
 
-  for (let gameIndex = 0; gameIndex < GAMES_PER_ROUND; gameIndex += 1) {
-    const sitOutIds = chooseGameSitOuts(
-      seededPlayerIds,
-      sitOutCount,
-      satOutCounts,
-      usedSitOuts,
-      random,
+  for (let courtIndex = 0; courtIndex < courtCount; courtIndex += 1) {
+    const courtPlayers = activePlayerIds.slice(
+      courtIndex * PLAYERS_PER_COURT,
+      courtIndex * PLAYERS_PER_COURT + PLAYERS_PER_COURT,
     )
-    sitOutIds.forEach((playerId) => usedSitOuts.add(playerId))
-
-    const activePlayerIds = seededPlayerIds.filter((playerId) => !sitOutIds.includes(playerId))
-    for (let courtIndex = 0; courtIndex < courtCount; courtIndex += 1) {
-      const courtPlayers = activePlayerIds.slice(
-        courtIndex * PLAYERS_PER_COURT,
-        courtIndex * PLAYERS_PER_COURT + PLAYERS_PER_COURT,
-      )
-      addCourtPlayers(courts[courtIndex], courtPlayers)
+    courts[courtIndex].playerIds = courtPlayers
+    for (let gameIndex = 0; gameIndex < GAMES_PER_ROUND; gameIndex += 1) {
       courts[courtIndex].games.push(
         buildGame(
           round,
@@ -241,20 +242,11 @@ function buildRound(
     }
   }
 
-  if (sitOutCount === 0) {
-    courts.forEach((court, courtIndex) => {
-      const courtPlayers = seededPlayerIds.slice(
-        courtIndex * PLAYERS_PER_COURT,
-        courtIndex * PLAYERS_PER_COURT + PLAYERS_PER_COURT,
-      )
-      court.playerIds = courtPlayers
-    })
-  }
-
   return {
     round,
     courts,
-    sitOutIds: [],
+    sitOutIds,
+    order: [...seededPlayerIds],
   }
 }
 
@@ -271,18 +263,13 @@ function tournamentPartnerHistory(rounds: TournamentRound[]) {
   return pairs
 }
 
-function countGameSitOuts(round: TournamentRound, current: Record<string, number>) {
+// Tally one rest per player for the round so the rotation keeps sit-outs even
+// across rounds. Players now sit a whole round at a time rather than per game.
+function countRoundSitOuts(round: TournamentRound, current: Record<string, number>) {
   const counts = { ...current }
-  const gameCount = Math.max(...round.courts.map((court) => court.games.length))
-  for (let gameIndex = 0; gameIndex < gameCount; gameIndex += 1) {
-    const gameSitOutIds = new Set<string>()
-    round.courts.forEach((court) => {
-      court.games[gameIndex]?.sitOutIds?.forEach((playerId) => gameSitOutIds.add(playerId))
-    })
-    gameSitOutIds.forEach((playerId) => {
-      counts[playerId] = (counts[playerId] ?? 0) + 1
-    })
-  }
+  round.sitOutIds.forEach((playerId) => {
+    counts[playerId] = (counts[playerId] ?? 0) + 1
+  })
   return counts
 }
 
@@ -335,9 +322,72 @@ export function createTournament(
   return {
     playedOn,
     playerIds: seededPlayerIds,
-    satOutCounts: countGameSitOuts(round, satOutCounts),
+    satOutCounts: countRoundSitOuts(round, satOutCounts),
     rounds: [round],
   }
+}
+
+// Rebuild an editable bracket from finished match rows so a tournament saved to
+// the leaderboard can be reopened on the tournament screen. Matches store the
+// winner as teamA; we keep the recorded scores but flag which side won so the
+// screen shows what was played. Games are grouped by round then court, in the
+// order the rows appear. Sit-out and skipped-game detail isn't recoverable from
+// match rows, so it's omitted — only games that were actually played come back.
+export function reconstructTournament(matches: Match[], playedOn: string): TournamentState {
+  const tagged = matches.filter(
+    (match) => typeof match.round === 'number' && typeof match.court === 'number',
+  )
+  const roundNumbers = [...new Set(tagged.map((match) => match.round as number))].sort(
+    (a, b) => a - b,
+  )
+
+  const rounds: TournamentRound[] = roundNumbers.map((roundNumber) => {
+    const roundMatches = tagged.filter((match) => match.round === roundNumber)
+    const courtNumbers = [...new Set(roundMatches.map((match) => match.court as number))].sort(
+      (a, b) => a - b,
+    )
+    const courts: TournamentCourt[] = courtNumbers.map((courtNumber) => {
+      const courtMatches = roundMatches.filter((match) => match.court === courtNumber)
+      const playerIds: string[] = []
+      const seen = new Set<string>()
+      const addPlayer = (id: string) => {
+        if (id && !seen.has(id)) {
+          seen.add(id)
+          playerIds.push(id)
+        }
+      }
+      const games: TournamentGame[] = courtMatches.map((match, index) => {
+        match.teamA.forEach(addPlayer)
+        match.teamB.forEach(addPlayer)
+        return {
+          id: `r${roundNumber}-c${courtNumber}-g${index + 1}`,
+          teamA: [match.teamA[0], match.teamA[1]],
+          teamB: [match.teamB[0], match.teamB[1]],
+          scoreA: String(match.scoreA),
+          scoreB: String(match.scoreB),
+        }
+      })
+      return { court: courtNumber, playerIds, games }
+    })
+    return { round: roundNumber, courts, sitOutIds: [] }
+  })
+
+  // Seed order isn't stored, so approximate it from the order players first
+  // appear (round 1, court 1 first). It's only used as a ranking tiebreaker.
+  const playerIds: string[] = []
+  const seenPlayers = new Set<string>()
+  rounds.forEach((round) =>
+    round.courts.forEach((court) =>
+      court.playerIds.forEach((id) => {
+        if (!seenPlayers.has(id)) {
+          seenPlayers.add(id)
+          playerIds.push(id)
+        }
+      }),
+    ),
+  )
+
+  return { playedOn, playerIds, satOutCounts: {}, rounds }
 }
 
 export function parseGameScores(game: TournamentGame) {
@@ -436,11 +486,42 @@ function promoteRelegate(previous: TournamentRound, seedOrderIds: string[]): str
   return ordered
 }
 
-// Build the next round from the previous round's results using court-ladder
-// promotion/relegation. When the field isn't a multiple of four (players rotate
-// through sit-outs and courts don't hold a fixed four), fall back to a global
-// reseed so the ladder stays well-defined. The original seed order in
-// state.playerIds is kept stable so it remains a consistent tiebreaker.
+// The next round's full ladder order from the previous round's results. Every
+// court holds a fixed four, so the king-of-the-court ladder (top two up, bottom
+// two down) applies whatever the field size: players who sat out hold their
+// ladder position, and the active courts promote/relegate around them. This is
+// what stops a player who swept a weak bottom court from leapfrogging onto the
+// top court past players who lost tougher games higher up. When the previous
+// round's courts aren't clean fours (e.g. a tournament rebuilt from saved match
+// rows), fall back to a global reseed so the order stays well-defined.
+function nextRoundOrder(previous: TournamentRound, seedOrderIds: string[]): string[] {
+  const courtsAreCleanFours =
+    previous.courts.length > 0 &&
+    previous.courts.every((court) => court.playerIds.length === PLAYERS_PER_COURT)
+
+  if (!courtsAreCleanFours) {
+    return rankRoundPlayers(previous, seedOrderIds).map((result) => result.playerId)
+  }
+
+  const promoted = promoteRelegate(previous, seedOrderIds)
+  const sitOutIds = previous.sitOutIds ?? []
+  if (sitOutIds.length === 0) return promoted
+
+  // Slot the promoted/relegated active players back into the non-resting
+  // positions of the order that built this round, leaving each sit-out player
+  // exactly where they were so resting is neither a promotion nor relegation.
+  const sitOutSet = new Set(sitOutIds)
+  const prevOrder =
+    previous.order ?? [...previous.courts.flatMap((court) => court.playerIds), ...sitOutIds]
+  const promotedQueue = [...promoted]
+  return prevOrder.map((playerId) =>
+    sitOutSet.has(playerId) ? playerId : (promotedQueue.shift() ?? playerId),
+  )
+}
+
+// Build the next round from the previous round's results using the court ladder.
+// The original seed order in state.playerIds is kept stable so it remains a
+// consistent tiebreaker.
 export function buildNextRound(
   state: TournamentState,
   random: () => number = Math.random,
@@ -448,14 +529,7 @@ export function buildNextRound(
   const previous = state.rounds[state.rounds.length - 1]
   const roundNumber = previous.round + 1
 
-  const cleanLadder =
-    state.playerIds.length % PLAYERS_PER_COURT === 0 &&
-    previous.courts.length === state.playerIds.length / PLAYERS_PER_COURT &&
-    previous.courts.every((court) => court.playerIds.length === PLAYERS_PER_COURT)
-
-  const orderedPlayerIds = cleanLadder
-    ? promoteRelegate(previous, state.playerIds)
-    : rankRoundPlayers(previous, state.playerIds).map((result) => result.playerId)
+  const orderedPlayerIds = nextRoundOrder(previous, state.playerIds)
 
   const round = buildRound(
     roundNumber,
@@ -466,7 +540,7 @@ export function buildNextRound(
   )
   return {
     ...state,
-    satOutCounts: countGameSitOuts(round, state.satOutCounts),
+    satOutCounts: countRoundSitOuts(round, state.satOutCounts),
     rounds: [
       ...state.rounds,
       round,
@@ -486,7 +560,7 @@ export function rebuildRoundsAfter(
 ): TournamentState {
   const keptRounds = state.rounds.slice(0, roundIndex + 1)
   const satOutCounts = keptRounds.reduce<Record<string, number>>(
-    (counts, round) => countGameSitOuts(round, counts),
+    (counts, round) => countRoundSitOuts(round, counts),
     {},
   )
   let rebuilt: TournamentState = { ...state, rounds: keptRounds, satOutCounts }

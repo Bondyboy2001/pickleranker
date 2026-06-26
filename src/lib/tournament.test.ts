@@ -97,6 +97,71 @@ describe('buildNextRound promotion/relegation', () => {
   })
 })
 
+describe('buildNextRound with an uneven field (sit-outs)', () => {
+  it('keeps the court ladder so a bottom-court sweeper cannot leapfrog to the top court', () => {
+    // 13 players: three courts of four plus one resting (p12). This reproduces
+    // the real bug where the field was not a multiple of four — the next round
+    // used to be a global reseed on raw wins, so the bottom court (p8..p11) that
+    // swept its own easy games jumped onto the top court while the strong top
+    // court got relegated. With the court ladder, bottom-court players can only
+    // promote one court (to court 2), never straight to court 1.
+    const playerIds = Array.from({ length: 13 }, (_, index) => `p${index}`)
+    const bottomCourtGames = [
+      game(['p8', 'p9'], ['p10', 'p11'], '11', '0'),
+      game(['p8', 'p10'], ['p9', 'p11'], '11', '0'),
+      game(['p8', 'p11'], ['p9', 'p10'], '11', '0'),
+    ]
+    const seededGames = (a: number) => [
+      game([`p${a}`, `p${a + 1}`], [`p${a + 2}`, `p${a + 3}`], '', ''),
+      game([`p${a}`, `p${a + 2}`], [`p${a + 1}`, `p${a + 3}`], '', ''),
+      game([`p${a}`, `p${a + 3}`], [`p${a + 1}`, `p${a + 2}`], '', ''),
+    ]
+    const state: TournamentState = {
+      playedOn: '2026-06-24',
+      playerIds,
+      satOutCounts: { p12: 1 },
+      rounds: [
+        {
+          round: 1,
+          sitOutIds: ['p12'],
+          order: playerIds,
+          courts: [
+            { court: 1, playerIds: ['p0', 'p1', 'p2', 'p3'], games: seededGames(0) },
+            { court: 2, playerIds: ['p4', 'p5', 'p6', 'p7'], games: seededGames(4) },
+            { court: 3, playerIds: ['p8', 'p9', 'p10', 'p11'], games: bottomCourtGames },
+          ],
+        },
+      ],
+    }
+
+    const next = buildNextRound(state)
+    const round2 = next.rounds[1]
+    const bottomCourt = ['p8', 'p9', 'p10', 'p11']
+
+    // Three fixed courts of four; one player rests the whole round.
+    expect(round2.courts).toHaveLength(3)
+    round2.courts.forEach((court) => expect(court.playerIds).toHaveLength(4))
+    expect(round2.sitOutIds).toHaveLength(1)
+
+    // The bug: a round-1 bottom-court player must not reach the top court.
+    expect(round2.courts[0].playerIds.filter((id) => bottomCourt.includes(id))).toEqual([])
+    // The top court is drawn only from round 1's two strongest courts.
+    round2.courts[0].playerIds.forEach((id) =>
+      expect(['p0', 'p1', 'p2', 'p3', 'p4', 'p5']).toContain(id),
+    )
+
+    // Everyone is still accounted for, and the previous rester is back in the field.
+    const everyone = new Set([
+      ...round2.courts.flatMap((court) => court.playerIds),
+      ...round2.sitOutIds,
+    ])
+    expect(everyone.size).toBe(13)
+    expect(everyone.has('p12')).toBe(true)
+    // p12 rested last round, so the rotation should not rest them again now.
+    expect(round2.sitOutIds).not.toContain('p12')
+  })
+})
+
 describe('rebuildRoundsAfter', () => {
   it('keeps earlier rounds and regenerates the same number of later rounds', () => {
     const playerIds = Array.from({ length: 16 }, (_, index) => `p${index}`)

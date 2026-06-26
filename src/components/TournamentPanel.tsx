@@ -3,14 +3,9 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
-  Clock,
   Eye,
   EyeOff,
   Flag,
-  Minus,
-  Pause,
-  Play,
-  Plus,
   RefreshCw,
   RotateCcw,
   Save,
@@ -22,10 +17,15 @@ import { AdminField } from './AdminField'
 import { DatePicker } from './DatePicker'
 import { PlayerPickerDialog } from './PlayerPickerDialog'
 import { ScoreInput } from './ScoreInput'
+import { TournamentTimer } from './TournamentTimer'
 import { type ThemedSelectOption } from './ThemedSelect'
 import { PlayerSlotSelect } from './PlayerSlotSelect'
 import { formatPlayedOnDate, formatResultsLabel, makeId } from '../lib/data'
-import { loadRemoteTournament, saveRemoteTournament } from '../lib/tournamentStorage'
+import {
+  archiveFinishedTournament,
+  loadRemoteTournament,
+  saveRemoteTournament,
+} from '../lib/tournamentStorage'
 import {
   buildNextRound,
   courtMovement,
@@ -42,25 +42,49 @@ import {
 } from '../lib/tournament'
 import type { Match, PlayerStanding } from '../lib/types'
 
-const DEFAULT_TIMER_MINUTES = 12
-const MIN_TIMER_MINUTES = 1
-const MAX_TIMER_MINUTES = 60
 const MOVE_CLASS: Record<CourtMovement, string> = {
   up: 'moving-up',
   down: 'moving-down',
   stays: 'staying',
 }
 
-function durationInputToSeconds(value: string) {
-  const minutes = Number(value)
-  if (!Number.isFinite(minutes)) return DEFAULT_TIMER_MINUTES * 60
-  return Math.round(Math.min(MAX_TIMER_MINUTES, Math.max(MIN_TIMER_MINUTES, minutes))) * 60
-}
+const DEMO_PLAYERS = Array.from({ length: 15 }, (_, index) => ({
+  id: `demo-player-${index + 1}`,
+  name: `Player ${index + 1}`,
+}))
+const DEMO_PLAYER_IDS = new Set(DEMO_PLAYERS.map((player) => player.id))
 
-function formatTimer(seconds: number) {
-  const minutes = Math.floor(seconds / 60)
-  const remainder = seconds % 60
-  return `${minutes}:${String(remainder).padStart(2, '0')}`
+const DEMO_SCORES: Array<[string, string]> = [
+  ['11', '7'],
+  ['9', '11'],
+  ['11', '5'],
+  ['8', '11'],
+  ['11', '9'],
+  ['6', '11'],
+]
+
+function scoreDemoLatestRound(state: TournamentState): TournamentState {
+  const latestRoundIndex = state.rounds.length - 1
+  return {
+    ...state,
+    rounds: state.rounds.map((round, roundIndex) =>
+      roundIndex === latestRoundIndex
+        ? {
+            ...round,
+            courts: round.courts.map((court, courtIndex) => ({
+              ...court,
+              games: court.games.map((game, gameIndex) => {
+                const [scoreA, scoreB] =
+                  DEMO_SCORES[
+                    (roundIndex * round.courts.length + courtIndex + gameIndex) % DEMO_SCORES.length
+                  ]
+                return { ...game, scoreA, scoreB }
+              }),
+            })),
+          }
+        : round,
+    ),
+  }
 }
 
 function RoundTab({
@@ -89,157 +113,6 @@ function RoundTab({
       Round {round}
       {isComplete ? <Check size={14} aria-hidden /> : null}
     </button>
-  )
-}
-
-function TournamentTimer() {
-  const defaultSeconds = DEFAULT_TIMER_MINUTES * 60
-  const [durationInput, setDurationInput] = useState(String(DEFAULT_TIMER_MINUTES))
-  const [remainingSeconds, setRemainingSeconds] = useState(defaultSeconds)
-  const [isRunning, setIsRunning] = useState(false)
-  const [hasStarted, setHasStarted] = useState(false)
-  const [endsAt, setEndsAt] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!isRunning || !endsAt) return
-    const tick = () => {
-      const nextRemaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
-      setRemainingSeconds(nextRemaining)
-      if (nextRemaining === 0) {
-        setIsRunning(false)
-        setEndsAt(null)
-      }
-    }
-
-    tick()
-    const intervalId = window.setInterval(tick, 250)
-    return () => window.clearInterval(intervalId)
-  }, [endsAt, isRunning])
-
-  function updateDuration(value: string) {
-    if (hasStarted) return
-    setDurationInput(value)
-    if (value.trim() === '') return
-    setRemainingSeconds(durationInputToSeconds(value))
-  }
-
-  function commitDuration() {
-    const seconds = durationInputToSeconds(durationInput)
-    setDurationInput(String(seconds / 60))
-    if (!hasStarted) setRemainingSeconds(seconds)
-  }
-
-  function stepMinutes(delta: number) {
-    if (hasStarted) return
-    const current = Math.round(durationInputToSeconds(durationInput) / 60)
-    const next = Math.min(MAX_TIMER_MINUTES, Math.max(MIN_TIMER_MINUTES, current + delta))
-    setDurationInput(String(next))
-    setRemainingSeconds(next * 60)
-  }
-
-  function startTimer() {
-    if (remainingSeconds <= 0) return
-    setHasStarted(true)
-    setIsRunning(true)
-    setEndsAt(Date.now() + remainingSeconds * 1000)
-  }
-
-  function pauseTimer() {
-    if (endsAt) {
-      setRemainingSeconds(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)))
-    }
-    setIsRunning(false)
-    setEndsAt(null)
-  }
-
-  function resetTimer() {
-    const seconds = durationInputToSeconds(durationInput)
-    setIsRunning(false)
-    setHasStarted(false)
-    setEndsAt(null)
-    setRemainingSeconds(seconds)
-  }
-
-  const isTimeUp = hasStarted && remainingSeconds === 0
-  const totalSeconds = Math.max(1, durationInputToSeconds(durationInput))
-  const progress = Math.min(1, Math.max(0, remainingSeconds / totalSeconds))
-
-  return (
-    <section
-      className={`tournament-timer${isRunning ? ' running' : ''}${isTimeUp ? ' done' : ''}`}
-      style={{ ['--timer-progress' as string]: progress }}
-    >
-      <div className="tournament-timer-display">
-        <span className="tournament-timer-icon" aria-hidden>
-          <Clock size={20} />
-        </span>
-        <div className="tournament-timer-readout">
-          <span className="tournament-timer-label">Round timer</span>
-          <strong>{formatTimer(remainingSeconds)}</strong>
-          <span className="tournament-timer-status">
-            {isTimeUp ? "Time's up" : isRunning ? 'Counting down' : hasStarted ? 'Paused' : 'Ready'}
-          </span>
-        </div>
-      </div>
-
-      <div className="tournament-timer-controls">
-        <div className="tournament-timer-minutes">
-          <span className="tournament-timer-minutes-label">Minutes</span>
-          <div className="tournament-timer-stepper">
-            <button
-              type="button"
-              className="tournament-timer-step"
-              onClick={() => stepMinutes(-1)}
-              disabled={hasStarted || Math.round(totalSeconds / 60) <= MIN_TIMER_MINUTES}
-              aria-label="Decrease minutes"
-            >
-              <Minus size={16} />
-            </button>
-            <input
-              type="number"
-              className="tournament-timer-minutes-input"
-              min={MIN_TIMER_MINUTES}
-              max={MAX_TIMER_MINUTES}
-              step="1"
-              value={durationInput}
-              onChange={(event) => updateDuration(event.target.value)}
-              onBlur={commitDuration}
-              disabled={hasStarted}
-              aria-label="Timer duration in minutes"
-            />
-            <button
-              type="button"
-              className="tournament-timer-step"
-              onClick={() => stepMinutes(1)}
-              disabled={hasStarted || Math.round(totalSeconds / 60) >= MAX_TIMER_MINUTES}
-              aria-label="Increase minutes"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-        </div>
-
-        <div className="tournament-timer-actions">
-          <button
-            type="button"
-            className="primary-button tournament-timer-button"
-            onClick={isRunning ? pauseTimer : startTimer}
-            disabled={remainingSeconds <= 0}
-          >
-            {isRunning ? <Pause size={16} /> : <Play size={16} />}
-            {isRunning ? 'Pause' : 'Start'}
-          </button>
-          <button type="button" className="ghost-button tournament-timer-button" onClick={resetTimer}>
-            <RotateCcw size={16} />
-            Reset
-          </button>
-        </div>
-      </div>
-
-      <span className="tournament-timer-track" aria-hidden>
-        <span className="tournament-timer-fill" />
-      </span>
-    </section>
   )
 }
 
@@ -330,7 +203,10 @@ function TournamentRoundView({
         {Array.from({ length: gameCount }, (_, gameIndex) => {
           const sitOutIds = round.courts[0]?.games[gameIndex]?.sitOutIds ?? []
           const skipped = round.courts[0]?.games[gameIndex]?.skipped ?? false
-          const scoredCount = round.courts.filter((court) => parseGameScores(court.games[gameIndex])).length
+          // Courts can hold different game counts (e.g. a reopened tournament
+          // rebuilt from saved scores), so this seat may not exist on every court.
+          const courtsWithGame = round.courts.filter((court) => court.games[gameIndex])
+          const scoredCount = courtsWithGame.filter((court) => parseGameScores(court.games[gameIndex])).length
           return (
             <section className={`tournament-game-block${skipped ? ' skipped' : ''}`} key={gameIndex}>
               <header className="tournament-game-head">
@@ -348,7 +224,7 @@ function TournamentRoundView({
                 </div>
                 <div className="tournament-game-head-end">
                   <span className="tournament-game-progress">
-                    {skipped ? 'Skipped' : `${scoredCount}/${round.courts.length} scored`}
+                    {skipped ? 'Skipped' : `${scoredCount}/${courtsWithGame.length} scored`}
                   </span>
                   {!readOnly ? (
                     <button
@@ -486,10 +362,14 @@ export function TournamentPanel({
   standings,
   saveRoundMatches,
   onFinished,
+  openTournament,
 }: {
   standings: PlayerStanding[]
   saveRoundMatches: (matches: Match[]) => Promise<boolean>
   onFinished?: () => void
+  // When set, load this finished bracket for editing instead of the active
+  // draft. Re-finishing replaces that date's results on the leaderboard.
+  openTournament?: TournamentState | null
 }) {
   const [tournament, setTournament] = useState<TournamentState | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -502,9 +382,26 @@ export function TournamentPanel({
   const [savingDraft, setSavingDraft] = useState(false)
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
   const [editLineups, setEditLineups] = useState(false)
+  const [isDemoTournament, setIsDemoTournament] = useState(false)
+  const [tournamentNotice, setTournamentNotice] = useState('')
 
   useEffect(() => {
     let cancelled = false
+    // Reopening a finished tournament: load it straight in for editing rather
+    // than the active draft. The draft auto-save then keeps it as the working
+    // tournament until it's re-finished.
+    if (openTournament) {
+      setTournament(openTournament)
+      setActiveRoundIndex(Math.max(0, openTournament.rounds.length - 1))
+      setSelectedIds([])
+      setFormError('')
+      setIsDemoTournament(false)
+      setTournamentNotice('')
+      setTournamentLoaded(true)
+      return () => {
+        cancelled = true
+      }
+    }
     void loadRemoteTournament().then((stored) => {
       if (cancelled) return
       if (stored) {
@@ -516,26 +413,38 @@ export function TournamentPanel({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [openTournament])
+
+  const hasDemoPlayers = tournament?.playerIds.some((playerId) => DEMO_PLAYER_IDS.has(playerId)) ?? false
+  const isDemoMode = isDemoTournament || hasDemoPlayers
 
   useEffect(() => {
     if (!tournamentLoaded) return
+    if (isDemoMode) return
     // Debounce so rapid score edits don't fire a Supabase write per keystroke.
     const timerId = window.setTimeout(() => {
       void saveRemoteTournament(tournament)
     }, 800)
     return () => window.clearTimeout(timerId)
-  }, [tournament, tournamentLoaded])
+  }, [isDemoMode, tournament, tournamentLoaded])
 
+  const tournamentPlayers = useMemo(
+    () => (isDemoMode ? [...standings, ...DEMO_PLAYERS] : standings),
+    [isDemoMode, standings],
+  )
   const playerNameById = useMemo(
-    () => new Map(standings.map((player) => [player.id, player.name])),
-    [standings],
+    () => new Map(tournamentPlayers.map((player) => [player.id, player.name])),
+    [tournamentPlayers],
   )
   const nameOf = (playerId: string) => playerNameById.get(playerId) ?? 'Unknown'
 
   const playerOptions = useMemo<ThemedSelectOption[]>(
-    () => standings.map((player) => ({ value: player.id, label: player.name })),
-    [standings],
+    () =>
+      tournamentPlayers.map((player) => ({
+        value: player.id,
+        label: player.name,
+      })),
+    [tournamentPlayers],
   )
 
   const seededSelection = useMemo(
@@ -567,9 +476,26 @@ export function TournamentPanel({
       return
     }
     setFormError('')
+    setTournamentNotice('')
     setActiveRoundIndex(0)
     setTournamentLoaded(true)
+    setIsDemoTournament(false)
     setTournament(createTournament(seededSelection, playedOn))
+  }
+
+  function loadDemoTournament() {
+    const playerIds = DEMO_PLAYERS.map((player) => player.id)
+    const roundOne = scoreDemoLatestRound(createTournament(playerIds, playedOn, () => 0.42))
+    const roundTwo = scoreDemoLatestRound(buildNextRound(roundOne, () => 0.42))
+    setSelectedIds([])
+    setFormError('')
+    setTournamentNotice('Demo tournament loaded. It will not be saved to the leaderboard.')
+    setDraftSavedAt(null)
+    setEditLineups(false)
+    setActiveRoundIndex(0)
+    setTournamentLoaded(true)
+    setIsDemoTournament(true)
+    setTournament(roundTwo)
   }
 
   function updateScore(
@@ -661,8 +587,9 @@ export function TournamentPanel({
   }
 
   // Add a player to the tournament roster, or remove one. Removing a player who
-  // is in matches leaves an empty seat (shown as "—") for you to fill via "Edit
-  // Round"; you can't advance or finish while a seat is empty.
+  // has already completed the active source round keeps those historical games
+  // intact, but clears them from later rounds so the next-round generator can
+  // reseed from the remaining roster.
   function toggleTournamentPlayer(playerId: string) {
     if (!tournament) return
     setFormError('')
@@ -680,30 +607,39 @@ export function TournamentPanel({
       if (!current) return current
       const satOutCounts = { ...current.satOutCounts }
       delete satOutCounts[playerId]
+      const shouldKeepRoundLineups = (roundIndex: number, round: TournamentRound) =>
+        roundIndex < activeRoundIndex || (roundIndex === activeRoundIndex && isRoundComplete(round))
       return {
         ...current,
         playerIds: current.playerIds.filter((id) => id !== playerId),
         satOutCounts,
-        rounds: current.rounds.map((round) => ({
-          ...round,
-          sitOutIds: round.sitOutIds.filter((id) => id !== playerId),
-          courts: round.courts.map((court) => ({
-            ...court,
-            playerIds: court.playerIds.filter((id) => id !== playerId),
-            games: court.games.map((game) => ({
-              ...game,
-              teamA: [blankSlot(game.teamA[0]), blankSlot(game.teamA[1])] as [string, string],
-              teamB: [blankSlot(game.teamB[0]), blankSlot(game.teamB[1])] as [string, string],
-              sitOutIds: game.sitOutIds?.filter((id) => id !== playerId),
+        rounds: current.rounds.map((round, roundIndex) => {
+          if (shouldKeepRoundLineups(roundIndex, round)) return round
+          return {
+            ...round,
+            sitOutIds: round.sitOutIds.filter((id) => id !== playerId),
+            courts: round.courts.map((court) => ({
+              ...court,
+              playerIds: court.playerIds.filter((id) => id !== playerId),
+              games: court.games.map((game) => ({
+                ...game,
+                teamA: [blankSlot(game.teamA[0]), blankSlot(game.teamA[1])] as [string, string],
+                teamB: [blankSlot(game.teamB[0]), blankSlot(game.teamB[1])] as [string, string],
+                sitOutIds: game.sitOutIds?.filter((id) => id !== playerId),
+              })),
             })),
-          })),
-        })),
+          }
+        }),
       }
     })
   }
 
   async function saveProgress() {
     if (!tournament) return
+    if (isDemoMode) {
+      setTournamentNotice('Demo tournaments are for testing only and are not saved.')
+      return
+    }
     setSavingDraft(true)
     await saveRemoteTournament(tournament)
     setSavingDraft(false)
@@ -740,6 +676,9 @@ export function TournamentPanel({
     setTournament(rebuildRoundsAfter(tournament, roundIndex))
     setActiveRoundIndex(roundIndex + 1)
     setFormError('')
+    setTournamentNotice(
+      `Regenerated ${laterCount} round${laterCount === 1 ? '' : 's'} after Round ${round.round}.`,
+    )
   }
 
   // Commit the tournament to the leaderboard, then clear it. Games that were
@@ -747,6 +686,21 @@ export function TournamentPanel({
   // skipped — only completed games are saved.
   async function finishTournament() {
     if (!tournament) return
+    if (isDemoMode) {
+      setFormError('Demo tournaments are for testing only. End the demo instead of saving it.')
+      return
+    }
+
+    // Every game in every round must be scored or skipped before finishing, so a
+    // half-entered bracket can't be committed to the leaderboard.
+    const incompleteIndex = tournament.rounds.findIndex((round) => !isRoundComplete(round))
+    if (incompleteIndex !== -1) {
+      setActiveRoundIndex(incompleteIndex)
+      setFormError(
+        `Enter a score for every game (or skip it) in Round ${tournament.rounds[incompleteIndex].round} before finishing the tournament.`,
+      )
+      return
+    }
 
     // A scored game must have four distinct players or the leaderboard will
     // reject it. Point the user at the exact game to fix rather than failing
@@ -799,12 +753,22 @@ export function TournamentPanel({
       return
     }
 
+    // Final confirmation — this commits the scores and updates everyone's
+    // rankings, so make the user opt in before it happens.
+    const confirmed = window.confirm(
+      `Finish this tournament and save ${matches.length} game${matches.length === 1 ? '' : 's'} to the leaderboard? This updates everyone's rankings and can't be undone from here.`,
+    )
+    if (!confirmed) return
+
     setSaving(true)
     const saved = await saveRoundMatches(matches)
     if (!saved) {
       setSaving(false)
       return
     }
+    // Archive the full bracket (keyed by date) so this tournament can be
+    // reopened and edited later, then re-finished to replace its results.
+    await archiveFinishedTournament(tournament)
     // Delete the saved draft now. The debounced auto-save would be cancelled
     // when this panel unmounts (onFinished switches tabs), leaving the old
     // bracket to reload — so clear it explicitly to blank the tournament page.
@@ -815,6 +779,8 @@ export function TournamentPanel({
     setSelectedIds([])
     setActiveRoundIndex(0)
     setEditLineups(false)
+    setIsDemoTournament(false)
+    setTournamentNotice('')
     onFinished?.()
   }
 
@@ -853,6 +819,8 @@ export function TournamentPanel({
     setSelectedIds([])
     setActiveRoundIndex(0)
     setFormError('')
+    setIsDemoTournament(false)
+    setTournamentNotice('')
   }
 
   if (!tournament) {
@@ -887,7 +855,7 @@ export function TournamentPanel({
             </span>
             {sitOutCount > 0 ? (
               <span className="tournament-stat-pill muted">
-                {sitOutCount} random sit-out{sitOutCount === 1 ? '' : 's'} per game
+                {sitOutCount} random sit-out{sitOutCount === 1 ? '' : 's'} per round
               </span>
             ) : null}
           </div>
@@ -952,6 +920,14 @@ export function TournamentPanel({
 
         {formError ? <p className="form-error">{formError}</p> : null}
         <div className="tournament-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={loadDemoTournament}
+          >
+            <RefreshCw size={16} />
+            Load demo tournament
+          </button>
           <button
             type="button"
             className="primary-button"
@@ -1027,30 +1003,32 @@ export function TournamentPanel({
       </div>
 
       <div className="tournament-lineup-bar">
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => setEditLineups((value) => !value)}
-        >
-          <Users size={15} />
-          {editLineups ? 'Finish Editing' : 'Edit Round'}
-        </button>
         {editLineups ? (
           <span className="tournament-lineup-hint">
             Tap a name to swap in a different player (e.g. if someone leaves).
           </span>
         ) : null}
-        {editLineups && !isCurrentRound ? (
+        <div className="tournament-lineup-actions">
+          {!isCurrentRound ? (
+            <button
+              type="button"
+              className="primary-button tournament-lineup-rebuild"
+              onClick={() => rebuildFollowing(activeRoundIndex)}
+              disabled={!roundDone}
+            >
+              <RefreshCw size={16} />
+              Regenerate next rounds
+            </button>
+          ) : null}
           <button
             type="button"
-            className="primary-button tournament-lineup-rebuild"
-            onClick={() => rebuildFollowing(activeRoundIndex)}
-            disabled={!roundDone}
+            className="ghost-button tournament-lineup-edit"
+            onClick={() => setEditLineups((value) => !value)}
           >
-            <RefreshCw size={16} />
-            Rebuild
+            <Users size={15} />
+            {editLineups ? 'Finish Editing' : 'Edit Round'}
           </button>
-        ) : null}
+        </div>
       </div>
 
       <TournamentRoundView
@@ -1070,6 +1048,11 @@ export function TournamentPanel({
       />
 
       {formError ? <p className="form-error">{formError}</p> : null}
+      {tournamentNotice ? (
+        <p className="tournament-round-hint saved" role="status">
+          {tournamentNotice}
+        </p>
+      ) : null}
       {anyRoundHasGap ? (
         <p className="tournament-round-hint editing">
           A court has a missing seat (—) or the same player twice. Use “Edit Round” to give every
@@ -1082,7 +1065,7 @@ export function TournamentPanel({
           type="button"
           className="ghost-button"
           onClick={saveProgress}
-          disabled={savingDraft || saving}
+          disabled={savingDraft || saving || isDemoMode}
         >
           <Save size={16} />
           {savingDraft ? 'Saving…' : 'Save progress'}
@@ -1102,7 +1085,7 @@ export function TournamentPanel({
               type="button"
               className="ghost-button"
               onClick={finishTournament}
-              disabled={saving}
+              disabled={saving || isDemoMode}
             >
               <Flag size={16} />
               {saving ? 'Saving…' : 'Finish Tournament'}
@@ -1122,7 +1105,7 @@ export function TournamentPanel({
 
       <PlayerPickerDialog
         open={pickerOpen}
-        players={standings}
+        players={tournamentPlayers}
         selectedIds={tournament.playerIds}
         onToggle={toggleTournamentPlayer}
         onClear={() => setFormError('Remove players one at a time so the matches stay intact.')}
