@@ -51,24 +51,37 @@ Copy `.env.example` to `.env.local` and fill in your Supabase project values.
    values ('<user-uuid>', 'ben@pickleranker.local');
    ```
 
-## Deploy to Vercel
+## Deploy to Cloudflare Pages
 
 The app is a static export (`output: 'export'`), so it deploys as plain static
 files — no server runtime.
 
-1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the
-   Vercel project settings (Environment Variables).
-2. Add `NEXT_PUBLIC_SITE_URL=https://dlpickle.vercel.app`.
-3. Deploy from the repo root: `npm run deploy`.
+### Option 1: GitHub Integration (Recommended)
 
-The deploy script builds the static export, deploys `out/`, then points
-`dlpickle.vercel.app` at the ready deployment. For a local manual deploy after
-building, publish the static export directory and then assign the alias:
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Pages → Create a project
+2. Connect your GitHub repository (`Bondyboy2001/pickleranker`)
+3. Configure build settings:
+   - **Build command**: `npm run build`
+   - **Build output directory**: `out`
+   - **Root directory**: (leave empty)
+4. Add environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SITE_URL=https://dlpickle.pages.dev`
+5. Save and deploy
+
+### Option 2: Wrangler CLI
 
 ```bash
 npm run build
-vercel deploy out --prod
-vercel alias set <deployment-url> dlpickle.vercel.app
+npx wrangler pages deploy out --project-name=pickleranker
+```
+
+### Manual Deploy After Building
+
+```bash
+npm run build
+# Upload the 'out/' directory via Cloudflare dashboard or wrangler
 ```
 
 ## Tests

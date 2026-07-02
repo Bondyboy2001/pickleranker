@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://dlpickle.vercel.app/sitemap.xml
+Sitemap: https://dlpickle.pages.dev/sitemap.xml

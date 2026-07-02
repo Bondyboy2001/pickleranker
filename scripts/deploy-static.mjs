@@ -1,9 +1,7 @@
+#!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 
-const PUBLIC_ALIAS = 'dlpickle.vercel.app'
-// The Vercel CLI no longer assumes a default team in non-interactive mode, so
-// every command needs an explicit scope.
-const SCOPE = '12hbond-9352s-projects'
+const PROJECT_NAME = 'pickleranker'
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -19,20 +17,11 @@ function run(command, args) {
   return result.stdout
 }
 
+console.log('Building static export...')
 run('npm', ['run', 'build'])
-const deployOutput = run('npx', ['vercel', 'deploy', 'out', '--prod', '--scope', SCOPE])
-let deploymentUrl =
-  deployOutput.match(/"url":\s*"([^"]+)"/)?.[1] ??
-  deployOutput.match(/Production\s+(https:\/\/\S+)/)?.[1]
 
-if (!deploymentUrl) {
-  const listOutput = run('npx', ['vercel', 'ls', 'out', '--scope', SCOPE])
-  deploymentUrl = listOutput.match(/https:\/\/out-\S+?\.vercel\.app/)?.[0]
-}
+console.log('\nDeploying to Cloudflare Pages...')
+run('npx', ['wrangler', 'pages', 'deploy', 'out', '--project-name', PROJECT_NAME])
 
-if (!deploymentUrl) {
-  console.error('Could not find deployment URL in Vercel output or deployment list.')
-  process.exit(1)
-}
-
-run('npx', ['vercel', 'alias', 'set', deploymentUrl, PUBLIC_ALIAS, '--scope', SCOPE])
+console.log(`\n✓ Deployed to Cloudflare Pages`)
+console.log(`  https://dlpickle.pages.dev`)

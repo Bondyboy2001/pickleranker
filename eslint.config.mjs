@@ -13,7 +13,7 @@ const eslintConfig = [
   {
     ignores: [
       '.next/**',
-      '.vercel/**',
+      '.wrangler/**',
       'out/**',
       '.playwright-cli/**',
       'node_modules/**',
