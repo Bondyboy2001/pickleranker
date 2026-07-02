@@ -1,9 +1,23 @@
 import { memo } from 'react'
 import Image from 'next/image'
-import { Moon, Sun } from 'lucide-react'
+import { Menu, Moon, Sun } from 'lucide-react'
 import { SyncStatus } from './SyncStatus'
 import { HeaderClock } from './HeaderClock'
 import { buildAdminRoute, buildPublicRoute, type PublicTab } from '../lib/routing'
+
+const PUBLIC_TABS = [
+  ['overall', 'Overall'],
+  ['weekly', 'Weekly'],
+  ['players', 'Players'],
+  ['how-4dr', 'How 4DR works'],
+] as const
+
+const TAB_LABELS: Record<PublicTab, string> = {
+  overall: 'Overall',
+  weekly: 'Weekly',
+  players: 'Players',
+  'how-4dr': 'How 4DR works',
+}
 
 export const AppHeader = memo(AppHeaderBase)
 
@@ -54,30 +68,48 @@ function AppHeaderBase({
       </div>
       <div className="topbar-actions">
         {!isAdminPage ? (
-          <div className="view-tabs header-tabs" role="tablist" aria-label="Leaderboard views">
-            {(
-              [
-                ['overall', 'Overall'],
-                ['weekly', 'Weekly'],
-                ['players', 'Players'],
-                ['how-4dr', 'How 4DR works'],
-              ] as const
-            ).map(([tab, label]) => (
-              <a
-                key={tab}
-                href={buildPublicRoute(tab)}
-                role="tab"
-                aria-selected={activeTab === tab}
-                className={activeTab === tab ? 'active' : ''}
-                onClick={(event) => {
-                  event.preventDefault()
-                  onTabChange(tab)
-                }}
-              >
-                {label}
-              </a>
-            ))}
-          </div>
+          <>
+            <div className="view-tabs header-tabs" role="tablist" aria-label="Leaderboard views">
+              {PUBLIC_TABS.map(([tab, label]) => (
+                <a
+                  key={tab}
+                  href={buildPublicRoute(tab)}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  className={activeTab === tab ? 'active' : ''}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    onTabChange(tab)
+                  }}
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+            <details className="mobile-view-menu">
+              <summary>
+                <Menu size={18} aria-hidden="true" />
+                <span>{TAB_LABELS[activeTab]}</span>
+              </summary>
+              <div role="menu" aria-label="Leaderboard views">
+                {PUBLIC_TABS.map(([tab, label]) => (
+                  <a
+                    key={tab}
+                    href={buildPublicRoute(tab)}
+                    role="menuitem"
+                    aria-current={activeTab === tab ? 'page' : undefined}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.currentTarget.closest('details')?.removeAttribute('open')
+                      onTabChange(tab)
+                    }}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </details>
+          </>
         ) : (
           <a className="ghost-link admin-link" href={buildPublicRoute('overall')}>
             View public site

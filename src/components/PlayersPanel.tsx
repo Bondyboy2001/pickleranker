@@ -322,7 +322,7 @@ function PlayerProfileDetail({
   }
 
   async function sharePlayer() {
-    const url = `${window.location.origin}${window.location.pathname}${buildPublicRoute('players', {
+    const url = `${window.location.origin}${buildPublicRoute('players', {
       playerId: player.id,
     })}`
     const shareData = { title: `${player.name} · DL Cardiff Pickleball`, url }
@@ -706,10 +706,11 @@ function PlayersPanelBase({
   onOpenWeeklyWeek: (playerId: string, week: string) => void
 }) {
   const [search, setSearch] = useState('')
+  const effectiveSelectedPlayerId = selectedPlayerId ?? standings[0]?.id ?? null
 
   const selectedPlayer = useMemo(
-    () => standings.find((player) => player.id === selectedPlayerId) ?? null,
-    [selectedPlayerId, standings],
+    () => standings.find((player) => player.id === effectiveSelectedPlayerId) ?? null,
+    [effectiveSelectedPlayerId, standings],
   )
 
   const selectedWeeks = useMemo(
@@ -751,7 +752,7 @@ function PlayersPanelBase({
       ) : (
         <aside className="panel players-profile-panel empty">
           <h2>Player overview</h2>
-          <p>Select a player to see their statistics and rating history.</p>
+          <p>Add players or select a player to see their statistics and rating history.</p>
         </aside>
       )}
     </div>

@@ -22,8 +22,13 @@ const TAB_PATHS: Record<string, PublicTab> = {
 
 export function parseRoute(hash: string): AppRoute {
   const raw = hash.replace(/^#/, '') || '/'
+  return parsePathRoute(raw)
+}
+
+export function parsePathRoute(path: string, search = ''): AppRoute {
+  const raw = path || '/'
   const [pathPart, queryPart] = raw.split('?')
-  const params = new URLSearchParams(queryPart ?? '')
+  const params = new URLSearchParams(queryPart ?? search.replace(/^\?/, ''))
   const segments = pathPart.split('/').filter(Boolean)
 
   if (segments[0] === 'admin' || segments[0] === 'manage') {
@@ -38,6 +43,14 @@ export function parseRoute(hash: string): AppRoute {
       page: 'public',
       tab: 'players',
       playerId: decodeURIComponent(segments[1]),
+    }
+  }
+
+  if (tab === 'players') {
+    return {
+      page: 'public',
+      tab: 'players',
+      playerId: params.get('player') ?? undefined,
     }
   }
 
@@ -57,14 +70,15 @@ export function buildPublicRoute(
   tab: PublicTab,
   options?: { playerId?: string; week?: string },
 ): string {
-  if (tab === 'overall') return '#/'
-  if (tab === 'how-4dr') return '#/how-4dr'
+  if (tab === 'overall') return '/'
+  if (tab === 'how-4dr') return '/how-4dr'
 
   if (tab === 'players') {
     if (options?.playerId) {
-      return `#/players/${encodeURIComponent(options.playerId)}`
+      const params = new URLSearchParams({ player: options.playerId })
+      return `/players?${params.toString()}`
     }
-    return '#/players'
+    return '/players'
   }
 
   if (tab === 'weekly') {
@@ -72,25 +86,37 @@ export function buildPublicRoute(
     if (options?.week) params.set('week', options.week)
     if (options?.playerId) params.set('player', options.playerId)
     const query = params.toString()
-    return query ? `#/weekly?${query}` : '#/weekly'
+    return query ? `/weekly?${query}` : '/weekly'
   }
 
-  return '#/'
+  return '/'
 }
 
 export function buildAdminRoute() {
-  return '#/manage'
+  return '/manage'
 }
 
 export function navigateTo(route: AppRoute) {
-  const hash =
+  const nextUrl =
     route.page === 'admin'
       ? buildAdminRoute()
       : buildPublicRoute(route.tab, {
           playerId: route.playerId,
           week: route.week,
         })
-  if (window.location.hash !== hash) {
-    window.location.hash = hash
+  const currentUrl = `${window.location.pathname}${window.location.search}`
+  // The static export uses trailingSlash:true (canonical `/players/`), while the
+  // route builders emit slash-less paths (`/players`). Normalise the path part of
+  // both before comparing so re-selecting the active tab doesn't push a redundant
+  // history entry.
+  if (normalizeUrlForCompare(currentUrl) !== normalizeUrlForCompare(nextUrl)) {
+    window.history.pushState({}, '', nextUrl)
+    window.dispatchEvent(new PopStateEvent('popstate'))
   }
+}
+
+function normalizeUrlForCompare(url: string): string {
+  const [path, query] = url.split('?')
+  const trimmedPath = path.replace(/\/+$/, '') || '/'
+  return query ? `${trimmedPath}?${query}` : trimmedPath
 }

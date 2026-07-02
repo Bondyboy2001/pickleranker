@@ -17,6 +17,7 @@ const nextConfig = {
   // and talks to Supabase directly from the browser, so no server runtime is
   // required. Vercel auto-detects the Next.js framework and serves this export.
   output: 'export',
+  trailingSlash: true,
   reactStrictMode: true,
   // Static export has no Image Optimization server; serve images as-is.
   images: {

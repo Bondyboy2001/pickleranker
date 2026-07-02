@@ -1,0 +1,400 @@
+- generic [ref=e1]:
+  - alert [ref=e2]
+  - main [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#main-content"
+    - generic [ref=e5]:
+      - button "David Lloyd Cardiff Pickleball leaderboard home" [ref=e7] [cursor=pointer]:
+        - img "David Lloyd Clubs Pickleball" [ref=e8]
+      - generic [ref=e9]:
+        - group [ref=e10]:
+          - generic "Weekly" [active] [ref=e11] [cursor=pointer]:
+            - img [ref=e12]
+            - generic [ref=e13]: Weekly
+          - menu "Leaderboard views" [ref=e369]:
+            - menuitem "Overall" [ref=e370] [cursor=pointer]
+            - menuitem "Weekly" [ref=e371] [cursor=pointer]
+            - menuitem "Players" [ref=e372] [cursor=pointer]
+            - menuitem "How 4DR works" [ref=e373] [cursor=pointer]
+        - link "Admin" [ref=e14] [cursor=pointer]:
+          - /url: /manage
+        - button "Switch to dark mode" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+      - status [ref=e18]: Data synced just now
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e28]:
+          - generic [ref=e30]:
+            - img [ref=e31]
+            - combobox "Search weekly players" [ref=e34]
+          - button "Select week" [ref=e36] [cursor=pointer]:
+            - generic [ref=e37]: 17-06-2026
+            - img [ref=e38]
+        - button "Biggest mover this week Gruff Huws +0.278" [ref=e40] [cursor=pointer]:
+          - generic [ref=e41]: 🔥
+          - generic [ref=e42]:
+            - generic [ref=e43]: Biggest mover this week
+            - strong [ref=e44]: Gruff Huws
+          - generic [ref=e45]: "+0.278"
+        - table [ref=e48]:
+          - rowgroup [ref=e49]:
+            - row "Rank ↑ Player ↕ 4DR ↕ 4DR +/- ↕ Diff ↕" [ref=e50]:
+              - columnheader "Rank ↑" [ref=e51]:
+                - button "Rank ↑" [ref=e52] [cursor=pointer]:
+                  - text: Rank
+                  - generic [ref=e53]: ↑
+              - columnheader "Player ↕" [ref=e54]:
+                - button "Player ↕" [ref=e55] [cursor=pointer]:
+                  - text: Player
+                  - generic [ref=e56]: ↕
+              - columnheader "4DR ↕" [ref=e57]:
+                - button "4DR ↕" [ref=e58] [cursor=pointer]:
+                  - text: 4DR
+                  - generic [ref=e59]: ↕
+              - columnheader "4DR +/- ↕" [ref=e60]:
+                - button "4DR +/- ↕" [ref=e61] [cursor=pointer]:
+                  - text: 4DR +/-
+                  - generic [ref=e62]: ↕
+              - columnheader "Diff ↕" [ref=e63]:
+                - button "Diff ↕" [ref=e64] [cursor=pointer]:
+                  - text: Diff
+                  - generic [ref=e65]: ↕
+          - rowgroup [ref=e66]:
+            - row "1 Gruff Huws 5 games | point +27 3.865 4DR +/- +0.278 Diff +5" [ref=e67] [cursor=pointer]:
+              - cell "1" [ref=e68]
+              - cell "Gruff Huws 5 games | point +27" [ref=e69]:
+                - strong [ref=e70]: Gruff Huws
+                - generic [ref=e71]: 5 games | point +27
+              - cell "3.865" [ref=e72]
+              - cell "4DR +/- +0.278" [ref=e73]:
+                - text: 4DR +/-
+                - generic [ref=e74]: "+0.278"
+              - cell "Diff +5" [ref=e75]:
+                - text: Diff
+                - generic [ref=e76]: "+5"
+            - row "2 Harry Bond 2 games | point -8 3.782 4DR +/- -0.122 Diff -2" [ref=e77] [cursor=pointer]:
+              - cell "2" [ref=e78]
+              - cell "Harry Bond 2 games | point -8" [ref=e79]:
+                - strong [ref=e80]: Harry Bond
+                - generic [ref=e81]: 2 games | point -8
+              - cell "3.782" [ref=e82]
+              - cell "4DR +/- -0.122" [ref=e83]:
+                - text: 4DR +/-
+                - generic [ref=e84]: "-0.122"
+              - cell "Diff -2" [ref=e85]:
+                - text: Diff
+                - generic [ref=e86]: "-2"
+            - row "4 Ben Gillespie 4 games | point +3 3.534 4DR +/- -0.038 Diff +0" [ref=e87] [cursor=pointer]:
+              - cell "4" [ref=e88]
+              - cell "Ben Gillespie 4 games | point +3" [ref=e89]:
+                - strong [ref=e90]: Ben Gillespie
+                - generic [ref=e91]: 4 games | point +3
+              - cell "3.534" [ref=e92]
+              - cell "4DR +/- -0.038" [ref=e93]:
+                - text: 4DR +/-
+                - generic [ref=e94]: "-0.038"
+              - cell "Diff +0" [ref=e95]:
+                - text: Diff
+                - generic [ref=e96]: "+0"
+            - row "6 Mark Slater 5 games | point +16 3.443 4DR +/- +0.116 Diff +3" [ref=e97] [cursor=pointer]:
+              - cell "6" [ref=e98]
+              - cell "Mark Slater 5 games | point +16" [ref=e99]:
+                - strong [ref=e100]: Mark Slater
+                - generic [ref=e101]: 5 games | point +16
+              - cell "3.443" [ref=e102]
+              - cell "4DR +/- +0.116" [ref=e103]:
+                - text: 4DR +/-
+                - generic [ref=e104]: "+0.116"
+              - cell "Diff +3" [ref=e105]:
+                - text: Diff
+                - generic [ref=e106]: "+3"
+            - row "7 Kwesi M Hazel 5 games | point -3 3.427 4DR +/- +0.005 Diff -1" [ref=e107] [cursor=pointer]:
+              - cell "7" [ref=e108]
+              - cell "Kwesi M Hazel 5 games | point -3" [ref=e109]:
+                - strong [ref=e110]: Kwesi M Hazel
+                - generic [ref=e111]: 5 games | point -3
+              - cell "3.427" [ref=e112]
+              - cell "4DR +/- +0.005" [ref=e113]:
+                - text: 4DR +/-
+                - generic [ref=e114]: "+0.005"
+              - cell "Diff -1" [ref=e115]:
+                - text: Diff
+                - generic [ref=e116]: "-1"
+            - row "10 Nick Price 5 games | point -4 3.364 4DR +/- +0.050 Diff +1" [ref=e117] [cursor=pointer]:
+              - cell "10" [ref=e118]
+              - cell "Nick Price 5 games | point -4" [ref=e119]:
+                - strong [ref=e120]: Nick Price
+                - generic [ref=e121]: 5 games | point -4
+              - cell "3.364" [ref=e122]
+              - cell "4DR +/- +0.050" [ref=e123]:
+                - text: 4DR +/-
+                - generic [ref=e124]: "+0.050"
+              - cell "Diff +1" [ref=e125]:
+                - text: Diff
+                - generic [ref=e126]: "+1"
+            - row "12 Paul Jeremy 4 games | point -19 3.338 4DR +/- -0.013 Diff -2" [ref=e127] [cursor=pointer]:
+              - cell "12" [ref=e128]
+              - cell "Paul Jeremy 4 games | point -19" [ref=e129]:
+                - strong [ref=e130]: Paul Jeremy
+                - generic [ref=e131]: 4 games | point -19
+              - cell "3.338" [ref=e132]
+              - cell "4DR +/- -0.013" [ref=e133]:
+                - text: 4DR +/-
+                - generic [ref=e134]: "-0.013"
+              - cell "Diff -2" [ref=e135]:
+                - text: Diff
+                - generic [ref=e136]: "-2"
+            - row "13 Jonathan Bould 5 games | point +2 3.312 4DR +/- +0.036 Diff -1" [ref=e137] [cursor=pointer]:
+              - cell "13" [ref=e138]
+              - cell "Jonathan Bould 5 games | point +2" [ref=e139]:
+                - strong [ref=e140]: Jonathan Bould
+                - generic [ref=e141]: 5 games | point +2
+              - cell "3.312" [ref=e142]
+              - cell "4DR +/- +0.036" [ref=e143]:
+                - text: 4DR +/-
+                - generic [ref=e144]: "+0.036"
+              - cell "Diff -1" [ref=e145]:
+                - text: Diff
+                - generic [ref=e146]: "-1"
+            - row "15 Chris Williamson 5 games | point +18 3.287 4DR +/- +0.166 Diff +3" [ref=e147] [cursor=pointer]:
+              - cell "15" [ref=e148]
+              - cell "Chris Williamson 5 games | point +18" [ref=e149]:
+                - strong [ref=e150]: Chris Williamson
+                - generic [ref=e151]: 5 games | point +18
+              - cell "3.287" [ref=e152]
+              - cell "4DR +/- +0.166" [ref=e153]:
+                - text: 4DR +/-
+                - generic [ref=e154]: "+0.166"
+              - cell "Diff +3" [ref=e155]:
+                - text: Diff
+                - generic [ref=e156]: "+3"
+            - row "20 Thomas Caruano 5 games | point -6 3.155 4DR +/- +0.007 Diff -1" [ref=e157] [cursor=pointer]:
+              - cell "20" [ref=e158]
+              - cell "Thomas Caruano 5 games | point -6" [ref=e159]:
+                - strong [ref=e160]: Thomas Caruano
+                - generic [ref=e161]: 5 games | point -6
+              - cell "3.155" [ref=e162]
+              - cell "4DR +/- +0.007" [ref=e163]:
+                - text: 4DR +/-
+                - generic [ref=e164]: "+0.007"
+              - cell "Diff -1" [ref=e165]:
+                - text: Diff
+                - generic [ref=e166]: "-1"
+            - row "21 Jonathon Bray 5 games | point -14 3.151 4DR +/- -0.094 Diff -3" [ref=e167] [cursor=pointer]:
+              - cell "21" [ref=e168]
+              - cell "Jonathon Bray 5 games | point -14" [ref=e169]:
+                - strong [ref=e170]: Jonathon Bray
+                - generic [ref=e171]: 5 games | point -14
+              - cell "3.151" [ref=e172]
+              - cell "4DR +/- -0.094" [ref=e173]:
+                - text: 4DR +/-
+                - generic [ref=e174]: "-0.094"
+              - cell "Diff -3" [ref=e175]:
+                - text: Diff
+                - generic [ref=e176]: "-3"
+            - row "25 Will Satherley 5 games | point +7 3.108 4DR +/- +0.034 Diff +1" [ref=e177] [cursor=pointer]:
+              - cell "25" [ref=e178]
+              - cell "Will Satherley 5 games | point +7" [ref=e179]:
+                - strong [ref=e180]: Will Satherley
+                - generic [ref=e181]: 5 games | point +7
+              - cell "3.108" [ref=e182]
+              - cell "4DR +/- +0.034" [ref=e183]:
+                - text: 4DR +/-
+                - generic [ref=e184]: "+0.034"
+              - cell "Diff +1" [ref=e185]:
+                - text: Diff
+                - generic [ref=e186]: "+1"
+            - row "26 William Brookes 5 games | point -13 3.084 4DR +/- -0.127 Diff -1" [ref=e187] [cursor=pointer]:
+              - cell "26" [ref=e188]
+              - cell "William Brookes 5 games | point -13" [ref=e189]:
+                - strong [ref=e190]: William Brookes
+                - generic [ref=e191]: 5 games | point -13
+              - cell "3.084" [ref=e192]
+              - cell "4DR +/- -0.127" [ref=e193]:
+                - text: 4DR +/-
+                - generic [ref=e194]: "-0.127"
+              - cell "Diff -1" [ref=e195]:
+                - text: Diff
+                - generic [ref=e196]: "-1"
+            - row "27 Cath Arnold 5 games | point +5 3.079 4DR +/- +0.079 Diff +1" [ref=e197] [cursor=pointer]:
+              - cell "27" [ref=e198]
+              - cell "Cath Arnold 5 games | point +5" [ref=e199]:
+                - strong [ref=e200]: Cath Arnold
+                - generic [ref=e201]: 5 games | point +5
+              - cell "3.079" [ref=e202]
+              - cell "4DR +/- +0.079" [ref=e203]:
+                - text: 4DR +/-
+                - generic [ref=e204]: "+0.079"
+              - cell "Diff +1" [ref=e205]:
+                - text: Diff
+                - generic [ref=e206]: "+1"
+            - row "30 Bethany Mcintyre 5 games | point +2 3.054 4DR +/- +0.054 Diff -1" [ref=e207] [cursor=pointer]:
+              - cell "30" [ref=e208]
+              - cell "Bethany Mcintyre 5 games | point +2" [ref=e209]:
+                - strong [ref=e210]: Bethany Mcintyre
+                - generic [ref=e211]: 5 games | point +2
+              - cell "3.054" [ref=e212]
+              - cell "4DR +/- +0.054" [ref=e213]:
+                - text: 4DR +/-
+                - generic [ref=e214]: "+0.054"
+              - cell "Diff -1" [ref=e215]:
+                - text: Diff
+                - generic [ref=e216]: "-1"
+            - row "33 Elizabeth Singer 5 games | point -3 3.035 4DR +/- -0.119 Diff -3" [ref=e217] [cursor=pointer]:
+              - cell "33" [ref=e218]
+              - cell "Elizabeth Singer 5 games | point -3" [ref=e219]:
+                - strong [ref=e220]: Elizabeth Singer
+                - generic [ref=e221]: 5 games | point -3
+              - cell "3.035" [ref=e222]
+              - cell "4DR +/- -0.119" [ref=e223]:
+                - text: 4DR +/-
+                - generic [ref=e224]: "-0.119"
+              - cell "Diff -3" [ref=e225]:
+                - text: Diff
+                - generic [ref=e226]: "-3"
+            - row "39 Keith John 5 games | point -10 3.000 4DR +/- +0.112 Diff +1" [ref=e227] [cursor=pointer]:
+              - cell "39" [ref=e228]
+              - cell "Keith John 5 games | point -10" [ref=e229]:
+                - strong [ref=e230]: Keith John
+                - generic [ref=e231]: 5 games | point -10
+              - cell "3.000" [ref=e232]
+              - cell "4DR +/- +0.112" [ref=e233]:
+                - text: 4DR +/-
+                - generic [ref=e234]: "+0.112"
+              - cell "Diff +1" [ref=e235]:
+                - text: Diff
+                - generic [ref=e236]: "+1"
+      - complementary [ref=e237]:
+        - generic [ref=e238]:
+          - generic [ref=e239]:
+            - text: Weekly player overview
+            - heading "Gruff Huws" [level=2] [ref=e240]
+            - paragraph [ref=e241]: 5 games this week
+          - strong [ref=e242]: "+0.278"
+        - generic [ref=e243]:
+          - generic [ref=e244]:
+            - generic [ref=e245]: Record
+            - strong [ref=e246]: 5-0
+          - generic [ref=e247]:
+            - generic [ref=e248]: Points
+            - strong [ref=e249]: 55-28
+          - generic [ref=e250]:
+            - generic [ref=e251]: 4DR move
+            - strong [ref=e252]: "+0.278"
+        - generic [ref=e253]:
+          - article [ref=e254]:
+            - generic [ref=e255]:
+              - generic [ref=e256]:
+                - generic [ref=e257]: "Game #2"
+                - heading "11-2" [level=3] [ref=e258]
+              - generic [ref=e259]: Win
+            - generic "Game 2 matchup" [ref=e260]:
+              - generic [ref=e261]:
+                - generic [ref=e262]:
+                  - generic [ref=e263]: Team A
+                  - strong [ref=e264]: "11"
+                - paragraph [ref=e265]: Ben Gillespie
+                - paragraph [ref=e266]: Gruff Huws
+              - generic [ref=e267]: vs
+              - generic [ref=e268]:
+                - generic [ref=e269]:
+                  - generic [ref=e270]: Team B
+                  - strong [ref=e271]: "2"
+                - paragraph [ref=e272]: Kwesi M Hazel
+                - paragraph [ref=e273]: Paul Jeremy
+            - button "Show rating details" [ref=e274] [cursor=pointer]:
+              - text: Show rating details
+              - img [ref=e275]
+          - article [ref=e277]:
+            - generic [ref=e278]:
+              - generic [ref=e279]:
+                - generic [ref=e280]: "Game #14"
+                - heading "11-8" [level=3] [ref=e281]
+              - generic [ref=e282]: Win
+            - generic "Game 14 matchup" [ref=e283]:
+              - generic [ref=e284]:
+                - generic [ref=e285]:
+                  - generic [ref=e286]: Team A
+                  - strong [ref=e287]: "11"
+                - paragraph [ref=e288]: Gruff Huws
+                - paragraph [ref=e289]: Paul Jeremy
+              - generic [ref=e290]: vs
+              - generic [ref=e291]:
+                - generic [ref=e292]:
+                  - generic [ref=e293]: Team B
+                  - strong [ref=e294]: "8"
+                - paragraph [ref=e295]: Ben Gillespie
+                - paragraph [ref=e296]: Kwesi M Hazel
+            - button "Show rating details" [ref=e297] [cursor=pointer]:
+              - text: Show rating details
+              - img [ref=e298]
+          - article [ref=e300]:
+            - generic [ref=e301]:
+              - generic [ref=e302]:
+                - generic [ref=e303]: "Game #15"
+                - heading "11-4" [level=3] [ref=e304]
+              - generic [ref=e305]: Win
+            - generic "Game 15 matchup" [ref=e306]:
+              - generic [ref=e307]:
+                - generic [ref=e308]:
+                  - generic [ref=e309]: Team A
+                  - strong [ref=e310]: "11"
+                - paragraph [ref=e311]: Gruff Huws
+                - paragraph [ref=e312]: Kwesi M Hazel
+              - generic [ref=e313]: vs
+              - generic [ref=e314]:
+                - generic [ref=e315]:
+                  - generic [ref=e316]: Team B
+                  - strong [ref=e317]: "4"
+                - paragraph [ref=e318]: Ben Gillespie
+                - paragraph [ref=e319]: Paul Jeremy
+            - button "Show rating details" [ref=e320] [cursor=pointer]:
+              - text: Show rating details
+              - img [ref=e321]
+          - article [ref=e323]:
+            - generic [ref=e324]:
+              - generic [ref=e325]:
+                - generic [ref=e326]: "Game #16"
+                - heading "11-5" [level=3] [ref=e327]
+              - generic [ref=e328]: Win
+            - generic "Game 16 matchup" [ref=e329]:
+              - generic [ref=e330]:
+                - generic [ref=e331]:
+                  - generic [ref=e332]: Team A
+                  - strong [ref=e333]: "11"
+                - paragraph [ref=e334]: Gruff Huws
+                - paragraph [ref=e335]: Jonathan Bould
+              - generic [ref=e336]: vs
+              - generic [ref=e337]:
+                - generic [ref=e338]:
+                  - generic [ref=e339]: Team B
+                  - strong [ref=e340]: "5"
+                - paragraph [ref=e341]: Harry Bond
+                - paragraph [ref=e342]: Mark Slater
+            - button "Show rating details" [ref=e343] [cursor=pointer]:
+              - text: Show rating details
+              - img [ref=e344]
+          - article [ref=e346]:
+            - generic [ref=e347]:
+              - generic [ref=e348]:
+                - generic [ref=e349]: "Game #19"
+                - heading "11-9" [level=3] [ref=e350]
+              - generic [ref=e351]: Win
+            - generic "Game 19 matchup" [ref=e352]:
+              - generic [ref=e353]:
+                - generic [ref=e354]:
+                  - generic [ref=e355]: Team A
+                  - strong [ref=e356]: "11"
+                - paragraph [ref=e357]: Gruff Huws
+                - paragraph [ref=e358]: Mark Slater
+              - generic [ref=e359]: vs
+              - generic [ref=e360]:
+                - generic [ref=e361]:
+                  - generic [ref=e362]: Team B
+                  - strong [ref=e363]: "9"
+                - paragraph [ref=e364]: Harry Bond
+                - paragraph [ref=e365]: Jonathan Bould
+            - button "Show rating details" [ref=e366] [cursor=pointer]:
+              - text: Show rating details
+              - img [ref=e367]
+    - paragraph [ref=e23]: David Lloyd Cardiff Pickleball · 4DR leaderboard

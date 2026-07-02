@@ -13,7 +13,7 @@ const eslintConfig = [
   {
     ignores: [
       '.next/**',
-      '.netlify/**',
+      '.vercel/**',
       'out/**',
       '.playwright-cli/**',
       'node_modules/**',

@@ -51,14 +51,25 @@ Copy `.env.example` to `.env.local` and fill in your Supabase project values.
    values ('<user-uuid>', 'ben@pickleranker.local');
    ```
 
-## Deploy to Netlify
+## Deploy to Vercel
 
 The app is a static export (`output: 'export'`), so it deploys as plain static
-files — no server runtime. Config lives in `netlify.toml`.
+files — no server runtime.
 
 1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the
-   Netlify site settings (Environment variables).
-2. Deploy from the repo root: `netlify deploy --build --prod`.
+   Vercel project settings (Environment Variables).
+2. Add `NEXT_PUBLIC_SITE_URL=https://dlpickle.vercel.app`.
+3. Deploy from the repo root: `npm run deploy`.
+
+The deploy script builds the static export, deploys `out/`, then points
+`dlpickle.vercel.app` at the ready deployment. For a local manual deploy after
+building, publish the static export directory and then assign the alias:
+
+```bash
+npm run build
+vercel deploy out --prod
+vercel alias set <deployment-url> dlpickle.vercel.app
+```
 
 ## Tests
 

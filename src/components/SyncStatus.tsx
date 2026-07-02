@@ -14,12 +14,12 @@ export function SyncStatus({
       {isLoading ? (
         <>
           <span className="sync-dot syncing" aria-hidden="true" />
-          Syncing…
+          Syncing data...
         </>
       ) : lastSyncedAt ? (
         <>
           <span className="sync-dot live" aria-hidden="true" />
-          Synced {formatRelativeTime(lastSyncedAt)}
+          Data synced {formatRelativeTime(lastSyncedAt)}
         </>
       ) : null}
     </p>

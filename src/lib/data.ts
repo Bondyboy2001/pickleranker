@@ -14,7 +14,7 @@ function normalizeName(name: string) {
 
 export function sortMatches(matches: Match[]) {
   return [...matches].sort((a, b) =>
-    `${a.playedOn}-${a.id}`.localeCompare(`${b.playedOn}-${b.id}`),
+    a.playedOn.localeCompare(b.playedOn) || a.id.localeCompare(b.id),
   )
 }
 
@@ -107,7 +107,7 @@ function mergeWithSeedData(data: AppData): AppData {
 
 export function saveLocalData(data: AppData) {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ players: data.players, matches: data.matches }))
 }
 
 export function exportDataSnapshot(data: AppData) {

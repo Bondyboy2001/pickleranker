@@ -30,7 +30,6 @@ type WeeklyViewProps = {
   weeklySearchPlayers: { id: string; name: string }[]
   onSelectPlayer: (playerId: string) => void
   filteredWeeklyStandings: WeeklyStanding[]
-  weeklyRankByPlayerId: Map<string, number>
   effectiveWeeklyPlayerId: string | null
   weeklySort: { key: WeeklySortKey; direction: SortDirection }
   onToggleWeeklySort: (key: WeeklySortKey) => void
@@ -50,7 +49,6 @@ function WeeklyViewBase({
   weeklySearchPlayers,
   onSelectPlayer,
   filteredWeeklyStandings,
-  weeklyRankByPlayerId,
   effectiveWeeklyPlayerId,
   weeklySort,
   onToggleWeeklySort,
@@ -153,18 +151,17 @@ function WeeklyViewBase({
                   title="4DR change this week"
                 />
                 <SortableHeader
-                  label="Diff"
-                  sortKey="recordDiff"
+                  label="Rank Difference"
+                  sortKey="rankMovement"
                   activeSort={weeklySort}
                   onSort={onToggleWeeklySort}
-                  title="Wins minus losses this week"
+                  title="Rank movement this week"
                 />
               </tr>
             </thead>
             <tbody>
-              {filteredWeeklyStandings.map((player, index) => {
+              {filteredWeeklyStandings.map((player) => {
                 const pointDifference = player.pointsFor - player.pointsAgainst
-                const recordDifference = player.wins - player.losses
                 return (
                   <tr
                     key={player.playerId}
@@ -180,9 +177,7 @@ function WeeklyViewBase({
                       }
                     }}
                   >
-                    <td className="rank-cell">
-                      {weeklyRankByPlayerId.get(player.playerId) ?? index + 1}
-                    </td>
+                    <td className="rank-cell">{player.rank}</td>
                     <td className="weekly-player-cell">
                       <strong>{player.name}</strong>
                       <span>
@@ -198,10 +193,10 @@ function WeeklyViewBase({
                         {player.change.toFixed(3)}
                       </span>
                     </td>
-                    <td data-label="Diff">
-                      <span className={movementClass(recordDifference)}>
-                        {recordDifference >= 0 ? '+' : ''}
-                        {recordDifference}
+                    <td data-label="Rank Difference">
+                      <span className={movementClass(player.rankMovement)}>
+                        {player.rankMovement >= 0 ? '+' : ''}
+                        {player.rankMovement}
                       </span>
                     </td>
                   </tr>

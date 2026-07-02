@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - main [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#main-content"
+    - generic [ref=e5]:
+      - button "David Lloyd Cardiff Pickleball leaderboard home" [ref=e7] [cursor=pointer]:
+        - img "David Lloyd Clubs Pickleball" [ref=e8]
+      - generic [ref=e9]:
+        - group [ref=e10]:
+          - generic "Weekly" [ref=e11] [cursor=pointer]:
+            - img [ref=e12]
+            - generic [ref=e13]: Weekly
+        - link "Admin" [ref=e14] [cursor=pointer]:
+          - /url: /manage
+        - button "Switch to dark mode" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+      - status [ref=e18]: Syncing data...
+    - generic [ref=e21]: Loading…
+    - paragraph [ref=e23]: David Lloyd Cardiff Pickleball · 4DR leaderboard

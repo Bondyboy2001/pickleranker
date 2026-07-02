@@ -44,9 +44,10 @@ import {
   sortStandings,
   sortWeeklyStandings,
 } from './lib/standings'
+import { reportClientEvent } from './lib/monitoring'
 import {
-  buildAdminRoute,
   navigateTo,
+  parsePathRoute,
   parseRoute,
   type AppRoute,
   type PublicTab,
@@ -79,9 +80,29 @@ function readPinnedPlayerId(): string | null {
   return localStorage.getItem(PINNED_PLAYER_STORAGE_KEY)
 }
 
+// The optional round/court columns may be missing on older databases. Detect that
+// specific case precisely — Postgres "undefined_column" is 42703 and PostgREST
+// surfaces a stale schema cache as PGRST204 — so an unrelated error that merely
+// mentions a "round" or a player named "Court" can never trigger the blind
+// whole-day delete / metadata-strip fallbacks.
+function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === '42703' || error.code === 'PGRST204') return true
+  return /column\b[^.]*\b(round|court|updated_at)\b[^.]*does not exist/i.test(error.message ?? '')
+}
+
+function stripOptionalMatchMetadata(row: ReturnType<typeof matchToDb>) {
+  const stripped = { ...row }
+  delete stripped.round
+  delete stripped.court
+  delete stripped.updated_at
+  return stripped
+}
+
 function getInitialRoute(): AppRoute {
   if (typeof window === 'undefined') return { page: 'public', tab: 'overall' }
-  return parseRoute(window.location.hash || '#/')
+  if (window.location.hash) return parseRoute(window.location.hash)
+  return parsePathRoute(window.location.pathname, window.location.search)
 }
 
 function App() {
@@ -128,6 +149,7 @@ function App() {
   const [matchError, setMatchError] = useState('')
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
   const [search, setSearch] = useState('')
+  const [minimumGames, setMinimumGames] = useState(0)
   const [weeklySearch, setWeeklySearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState(() =>
     initialRoute.page === 'public' ? (initialRoute.week ?? '') : '',
@@ -152,6 +174,7 @@ function App() {
       if (message) setNotice(message)
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Could not load data.'
+      reportClientEvent('remote-data-refresh-failed', error)
       setLoadError(text)
       setLoadState('error')
       // We still have cached data on screen, so keep the message low-key.
@@ -165,9 +188,20 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    const onHashChange = () => setRoute(parseRoute(window.location.hash || '#/'))
+    const readRoute = () =>
+      setRoute(
+        window.location.hash
+          ? parseRoute(window.location.hash)
+          : parsePathRoute(window.location.pathname, window.location.search),
+      )
+    const onHashChange = () => readRoute()
+    const onPopState = () => readRoute()
     window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('hashchange', onHashChange)
+      window.removeEventListener('popstate', onPopState)
+    }
   }, [])
 
   useEffect(() => {
@@ -230,6 +264,7 @@ function App() {
       .catch((error: unknown) => {
         if (cancelled) return
         const text = error instanceof Error ? error.message : 'Could not load data.'
+        reportClientEvent('remote-data-load-failed', error)
         setLoadError(text)
         setLoadState('error')
         // The cached leaderboard is already showing, so don't alarm the user.
@@ -308,20 +343,43 @@ function App() {
     () => new Map(standings.map((player, index) => [player.id, index + 1])),
     [standings],
   )
+  const standingByPlayerId = useMemo(
+    () => new Map(standings.map((player) => [player.id, player])),
+    [standings],
+  )
+  const rankMovementByPlayerId = useMemo(() => {
+    const previousSnapshot = weeklySnapshots.at(-1)
+    if (!previousSnapshot) return new Map<string, number>()
+
+    const previousRankByPlayerId = new Map(
+      previousSnapshot.players.map((player) => [player.playerId, player.rank]),
+    )
+
+    return new Map(
+      standings.map((player, index) => {
+        const currentRank = index + 1
+        const previousRank = previousRankByPlayerId.get(player.id)
+        return [player.id, previousRank ? previousRank - currentRank : 0]
+      }),
+    )
+  }, [standings, weeklySnapshots])
   const sortedStandings = useMemo(
     () => sortStandings(standings, sort.key, sort.direction),
     [sort, standings],
   )
   const filteredStandings = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return sortedStandings
-    return sortedStandings.filter((player) => player.name.toLowerCase().includes(query))
-  }, [search, sortedStandings])
+    return sortedStandings.filter((player) => {
+      // An active name search takes precedence: a matching player is always shown,
+      // even below the games threshold, so searching never hides an exact match.
+      if (query) return player.name.toLowerCase().includes(query)
+      return player.games >= minimumGames
+    })
+  }, [minimumGames, search, sortedStandings])
   const sortedWeeklyStandings = useMemo(
     () => sortWeeklyStandings(weeklyStandings, weeklySort.key, weeklySort.direction),
     [weeklyStandings, weeklySort],
   )
-  const weeklyRankByPlayerId = rankByPlayerId
   const filteredWeeklyStandings = useMemo(() => {
     const query = weeklySearch.trim().toLowerCase()
     if (!query) return sortedWeeklyStandings
@@ -337,9 +395,9 @@ function App() {
   const selectedWeeklyPlayerName = useMemo(
     () =>
       selectedWeeklyComputedPlayer?.name ??
-      standings.find((player) => player.id === effectiveWeeklyPlayerId)?.name ??
+      standingByPlayerId.get(effectiveWeeklyPlayerId ?? '')?.name ??
       '',
-    [effectiveWeeklyPlayerId, selectedWeeklyComputedPlayer?.name, standings],
+    [effectiveWeeklyPlayerId, selectedWeeklyComputedPlayer?.name, standingByPlayerId],
   )
   const weeklyPlayerGames = useMemo(
     () =>
@@ -437,9 +495,13 @@ function App() {
 
   async function signOut() {
     if (!supabase) return
-    await supabase.auth.signOut()
     setIsAdmin(false)
+    setSession(null)
     setNotice('Signed out.')
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
+    if (error) {
+      reportClientEvent('admin_sign_out_failed', { message: error.message })
+    }
   }
 
   async function addPlayer(event: FormEvent<HTMLFormElement>) {
@@ -456,6 +518,7 @@ function App() {
       if (supabase) {
         const { error } = await supabase.from('players').insert(playerToDb(player))
         if (error) {
+          reportClientEvent('player-save-failed', error, { name })
           setNotice(error.message)
           return
         }
@@ -544,10 +607,18 @@ function App() {
     setSavingAction('match')
     try {
       if (supabase) {
-        const { error } = previousMatchId
-          ? await supabase.from('matches').update(matchToDb(match)).eq('id', previousMatchId)
-          : await supabase.from('matches').insert(matchToDb(match))
+        const row = matchToDb(match)
+        let { error } = previousMatchId
+          ? await supabase.from('matches').update(row).eq('id', previousMatchId)
+          : await supabase.from('matches').insert(row)
+        if (isMissingColumnError(error)) {
+          const stripped = stripOptionalMatchMetadata(row)
+          ;({ error } = previousMatchId
+            ? await supabase.from('matches').update(stripped).eq('id', previousMatchId)
+            : await supabase.from('matches').insert(stripped))
+        }
         if (error) {
+          reportClientEvent('match-save-failed', error, { previousMatchId: previousMatchId ?? 'new' })
           setMatchError(error.message)
           return
         }
@@ -627,6 +698,7 @@ function App() {
       if (supabase) {
         const { error } = await supabase.from('matches').delete().eq('id', matchId)
         if (error) {
+          reportClientEvent('match-delete-failed', error, { matchId })
           setNotice(error.message)
           return
         }
@@ -656,19 +728,36 @@ function App() {
     if (!requireAdmin()) return false
 
     const message = `${newMatches.length} tournament games saved to the leaderboard.`
-    // A tournament owns its whole day's results, so replace any matches already
-    // saved for that date. This keeps the leaderboard in sync with the final
-    // bracket (e.g. after swapping a player) instead of stacking stale/duplicate
-    // rows from an earlier save. Imported/seed matches live outside the DB.
+    // A tournament owns its day's results, so replace any tournament matches
+    // already saved for that date. This keeps the leaderboard in sync with the
+    // final bracket (e.g. after swapping a player) instead of stacking
+    // stale/duplicate rows from an earlier save. Only rows tagged with a round
+    // are removed, so manually-entered games on the same day are left intact.
     const playedOnDates = [...new Set(newMatches.map((match) => match.playedOn))]
 
     if (supabase) {
       if (playedOnDates.length > 0) {
-        const { error: deleteError } = await supabase
+        // Scope the replace to tournament-originated rows (round is set). Older
+        // DBs without the round column can't make that distinction, so fall
+        // back to replacing the whole day there.
+        // Caveat: tournament rows saved before the round column existed are
+        // stored with round=null and are indistinguishable from manual games, so
+        // re-finishing such a tournament after the column was added leaves the old
+        // null-round copies behind (double-counting). Those legacy rows need a
+        // one-time manual cleanup; nothing here can tell them apart safely.
+        let { error: deleteError } = await supabase
           .from('matches')
           .delete()
           .in('played_on', playedOnDates)
+          .not('round', 'is', null)
+        if (isMissingColumnError(deleteError)) {
+          ;({ error: deleteError } = await supabase
+            .from('matches')
+            .delete()
+            .in('played_on', playedOnDates))
+        }
         if (deleteError) {
+          reportClientEvent('tournament-replace-failed', deleteError)
           setNotice(deleteError.message)
           return false
         }
@@ -677,16 +766,12 @@ function App() {
       let { error } = await supabase.from('matches').insert(rows)
       // The round/court columns are optional (older DBs may not have them yet).
       // If they're missing, retry without that metadata so saving still works.
-      if (error && /round|court/i.test(error.message)) {
-        const stripped = rows.map((row) => {
-          const copy = { ...row }
-          delete copy.round
-          delete copy.court
-          return copy
-        })
+      if (isMissingColumnError(error)) {
+        const stripped = rows.map(stripOptionalMatchMetadata)
         ;({ error } = await supabase.from('matches').insert(stripped))
       }
       if (error) {
+        reportClientEvent('tournament-save-failed', error)
         setNotice(error.message)
         return false
       }
@@ -696,7 +781,11 @@ function App() {
       return true
     }
 
-    const kept = data.matches.filter((match) => !playedOnDates.includes(match.playedOn))
+    // Mirror the remote behaviour: only drop this date's tournament rows (round
+    // is set), leaving manually-entered games for the same day in place.
+    const kept = data.matches.filter(
+      (match) => !(playedOnDates.includes(match.playedOn) && match.round != null),
+    )
     applyData({ ...data, matches: [...kept, ...newMatches] }, message)
     return true
   }
@@ -722,7 +811,7 @@ function App() {
     [],
   )
   const goToAdminFromLogo = useCallback(() => {
-    window.location.hash = buildAdminRoute()
+    navigateTo({ page: 'admin' })
   }, [])
   const handlePlayersSelect = useCallback((playerId: string) => {
     setSelectedPlayerId(playerId)
@@ -848,13 +937,17 @@ function App() {
                 sortedStandings={sortedStandings}
                 filteredStandings={filteredStandings}
                 rankByPlayerId={rankByPlayerId}
+                standingByPlayerId={standingByPlayerId}
                 search={search}
                 onSearchChange={setSearch}
+                minimumGames={minimumGames}
+                onMinimumGamesChange={setMinimumGames}
                 onPlayerSelect={openPlayerProfile}
                 pinnedPlayerId={pinnedPlayerId}
                 onPinPlayer={setPinnedPlayerId}
                 sort={sort}
                 onToggleSort={toggleSort}
+                rankMovementByPlayerId={rankMovementByPlayerId}
                 playerCount={data.players.length}
                 matchCount={data.matches.length}
                 averageRating={averageRating}
@@ -871,7 +964,6 @@ function App() {
                 weeklySearchPlayers={weeklySearchPlayers}
                 onSelectPlayer={selectWeeklyPlayer}
                 filteredWeeklyStandings={filteredWeeklyStandings}
-                weeklyRankByPlayerId={weeklyRankByPlayerId}
                 effectiveWeeklyPlayerId={effectiveWeeklyPlayerId}
                 weeklySort={weeklySort}
                 onToggleWeeklySort={toggleWeeklySort}
