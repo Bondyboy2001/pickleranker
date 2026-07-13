@@ -149,7 +149,7 @@ function App() {
   const [matchError, setMatchError] = useState('')
   const [playerForm, setPlayerForm] = useState({ name: '', skillLevel: '3.0' })
   const [search, setSearch] = useState('')
-  const [minimumGames, setMinimumGames] = useState(0)
+  const [minimumGames, setMinimumGames] = useState(10)
   const [weeklySearch, setWeeklySearch] = useState('')
   const [selectedWeek, setSelectedWeek] = useState(() =>
     initialRoute.page === 'public' ? (initialRoute.week ?? '') : '',
@@ -877,6 +877,7 @@ function App() {
         onThemeToggle={toggleTheme}
         lastSyncedAt={lastSyncedAt}
         isLoading={loadState === 'loading' && isSupabaseConfigured}
+        hasVisibleData={data.players.length > 0}
         onLogoLongPress={goToAdminFromLogo}
       />
 

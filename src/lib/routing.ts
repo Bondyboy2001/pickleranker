@@ -1,13 +1,13 @@
 export type PublicTab = 'overall' | 'weekly' | 'players' | 'how-4dr'
 
-export type PublicRoute = {
+type PublicRoute = {
   page: 'public'
   tab: PublicTab
   playerId?: string
   week?: string
 }
 
-export type AdminRoute = {
+type AdminRoute = {
   page: 'admin'
 }
 

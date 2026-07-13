@@ -74,7 +74,7 @@ files — no server runtime.
 
 ```bash
 npm run build
-npx wrangler pages deploy out --project-name=pickleranker
+npx wrangler pages deploy out --project-name=dlpickle --branch=main
 ```
 
 ### Manual Deploy After Building

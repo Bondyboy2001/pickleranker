@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 
-const PROJECT_NAME = 'pickleranker'
+const PROJECT_NAME = 'dlpickle'
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -21,7 +21,16 @@ console.log('Building static export...')
 run('npm', ['run', 'build'])
 
 console.log('\nDeploying to Cloudflare Pages...')
-run('npx', ['wrangler', 'pages', 'deploy', 'out', '--project-name', PROJECT_NAME])
+run('npx', [
+  'wrangler',
+  'pages',
+  'deploy',
+  'out',
+  '--project-name',
+  PROJECT_NAME,
+  '--branch',
+  'main',
+])
 
 console.log(`\n✓ Deployed to Cloudflare Pages`)
 console.log(`  https://dlpickle.pages.dev`)

@@ -411,7 +411,7 @@ function PlayerProfileDetail({
           </strong>
         </div>
         <div>
-          <span>Foe</span>
+          <span>Toughest opponent</span>
           <strong>{matchups.foe?.name ?? '—'}</strong>
           {matchups.foe ? (
             <small>
@@ -420,7 +420,7 @@ function PlayerProfileDetail({
           ) : null}
         </div>
         <div>
-          <span>Friend</span>
+          <span>Best record against</span>
           <strong>{matchups.friend?.name ?? '—'}</strong>
           {matchups.friend ? (
             <small>
@@ -706,7 +706,7 @@ function PlayersPanelBase({
   onOpenWeeklyWeek: (playerId: string, week: string) => void
 }) {
   const [search, setSearch] = useState('')
-  const effectiveSelectedPlayerId = selectedPlayerId ?? standings[0]?.id ?? null
+  const effectiveSelectedPlayerId = selectedPlayerId
 
   const selectedPlayer = useMemo(
     () => standings.find((player) => player.id === effectiveSelectedPlayerId) ?? null,
@@ -724,7 +724,6 @@ function PlayersPanelBase({
   return (
     <div className="players-workspace">
       <div className="players-main-column">
-        <HeadToHeadPanel data={data} standings={standings} />
         <section className="panel players-list-panel">
           <div className="panel-heading players-heading">
             <PlayerSearchAutocomplete
@@ -732,12 +731,13 @@ function PlayersPanelBase({
               value={search}
               onChange={setSearch}
               onSelect={onSelectPlayer}
-              placeholder="Search players..."
-              ariaLabel="Search players"
+              placeholder="Find your player profile…"
+              ariaLabel="Find your player profile"
               className="players-search"
             />
           </div>
         </section>
+        <HeadToHeadPanel data={data} standings={standings} />
       </div>
 
       {selectedPlayer ? (
@@ -752,7 +752,7 @@ function PlayersPanelBase({
       ) : (
         <aside className="panel players-profile-panel empty">
           <h2>Player overview</h2>
-          <p>Add players or select a player to see their statistics and rating history.</p>
+          <p>Search for yourself to see your statistics, recent form, and rating history.</p>
         </aside>
       )}
     </div>

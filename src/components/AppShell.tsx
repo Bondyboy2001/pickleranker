@@ -29,6 +29,7 @@ function AppHeaderBase({
   onThemeToggle,
   lastSyncedAt,
   isLoading,
+  hasVisibleData,
   onLogoLongPress,
 }: {
   isAdminPage: boolean
@@ -38,6 +39,7 @@ function AppHeaderBase({
   onThemeToggle: () => void
   lastSyncedAt: string | null
   isLoading: boolean
+  hasVisibleData: boolean
   onLogoLongPress: () => void
 }) {
   return (
@@ -107,6 +109,9 @@ function AppHeaderBase({
                     {label}
                   </a>
                 ))}
+                <a href={buildAdminRoute()} role="menuitem" className="mobile-admin-menu-link">
+                  Admin
+                </a>
               </div>
             </details>
           </>
@@ -130,7 +135,13 @@ function AppHeaderBase({
           {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
       </div>
-      {!isAdminPage ? <SyncStatus lastSyncedAt={lastSyncedAt} isLoading={isLoading} /> : null}
+      {!isAdminPage ? (
+        <SyncStatus
+          lastSyncedAt={lastSyncedAt}
+          isLoading={isLoading}
+          hasVisibleData={hasVisibleData}
+        />
+      ) : null}
     </header>
   )
 }

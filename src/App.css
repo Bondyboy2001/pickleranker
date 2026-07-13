@@ -904,6 +904,36 @@ td span {
   padding-bottom: 1px;
 }
 
+.overall-leaderboard {
+  display: grid;
+}
+
+.overall-leaderboard .summary-strip {
+  order: 1;
+}
+
+.overall-leaderboard .sticky-player-bar {
+  order: 2;
+}
+
+.leaderboard-toolbar-panel {
+  order: 3;
+  margin: 2px 28px 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.leaderboard-toolbar-panel .leaderboard-toolbar {
+  padding: 0;
+  background: transparent;
+}
+
+.overall-leaderboard .leaderboard-panel {
+  order: 4;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1157,13 +1187,24 @@ td strong {
   min-width: 0;
 }
 
-.leaderboard-player-cell strong {
+.leaderboard-player-cell a {
   min-width: 0;
   overflow: hidden;
+  color: var(--text-strong);
   font-size: 20px;
+  font-weight: 800;
   line-height: 1.15;
+  text-decoration-thickness: 1px;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.leaderboard-player-cell a:hover,
+.leaderboard-player-cell a:focus-visible {
+  color: var(--accent-strong);
+  text-decoration-color: currentColor;
 }
 
 tbody tr {
@@ -2223,10 +2264,10 @@ select:focus {
   background: var(--accent-tint);
 }
 
-.player-breakdown tr:last-child th,
-.player-breakdown tr:last-child td,
-.points-breakdown tr:last-child th,
-.points-breakdown tr:last-child td {
+.player-breakdown tbody tr:last-child th,
+.player-breakdown tbody tr:last-child td,
+.points-breakdown tbody tr:last-child th,
+.points-breakdown tbody tr:last-child td {
   border-bottom: 0;
 }
 
@@ -2366,6 +2407,27 @@ select:focus {
 
   .topbar-actions .theme-toggle {
     flex: 0 0 44px;
+  }
+
+  .topbar-actions .header-admin-link {
+    display: none;
+  }
+
+  .overall-leaderboard .leaderboard-toolbar-panel {
+    order: 1;
+    margin: 12px 12px 0;
+  }
+
+  .overall-leaderboard .sticky-player-bar {
+    order: 2;
+  }
+
+  .overall-leaderboard .leaderboard-panel {
+    order: 3;
+  }
+
+  .overall-leaderboard .summary-strip {
+    order: 4;
   }
 
   .header-tabs {
@@ -5002,7 +5064,7 @@ select:focus {
 }
 
 .leaderboard-row {
-  cursor: pointer;
+  cursor: default;
 }
 
 .rank-movement {

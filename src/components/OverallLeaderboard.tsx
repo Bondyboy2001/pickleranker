@@ -5,6 +5,7 @@ import { SortableHeader } from './SortableHeader'
 import { StickyPlayerBar } from './StickyPlayerBar'
 import { formatSignedPoints, formatWinRate } from '../lib/format'
 import { formatRating } from '../lib/scoring'
+import { buildPublicRoute } from '../lib/routing'
 import type { PlayerStanding, SortDirection, SortKey } from '../lib/types'
 
 const LEADERBOARD_COLUMN_COUNT = 8
@@ -82,7 +83,51 @@ function OverallLeaderboardBase({
   }, [])
 
   return (
-    <>
+    <div className="overall-leaderboard">
+      <section className="panel leaderboard-toolbar-panel" aria-label="Find a player">
+        <div className="leaderboard-toolbar">
+          <PlayerSearchAutocomplete
+            players={searchPlayers}
+            value={search}
+            onChange={onSearchChange}
+            onSelect={(playerId) => {
+              onPinPlayer(playerId)
+              onSearchChange(searchPlayers.find((p) => p.id === playerId)?.name ?? '')
+            }}
+            placeholder="Find my ranking…"
+            ariaLabel="Find my ranking"
+            className="leaderboard-search"
+          />
+          <div className="minimum-games-filter" role="group" aria-label="Leaderboard eligibility">
+            {(
+              [
+                [10, 'Qualified (10+ games)'],
+                [0, 'All players'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={minimumGames === value ? 'active' : ''}
+                aria-pressed={minimumGames === value}
+                onClick={() => onMinimumGamesChange(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {isNarrowViewport && filteredStandings.length > COMPACT_LEADERBOARD_ROWS ? (
+            <button
+              type="button"
+              className="ghost-button leaderboard-range-button"
+              onClick={() => setShowAllRows((current) => !current)}
+            >
+              {showAllRows || search.trim().length > 0 ? 'Show top 10' : 'Show all players'}
+            </button>
+          ) : null}
+        </div>
+      </section>
+
       <section className="summary-strip" aria-label="League summary">
         <div className="summary-card">
           <span className="summary-icon">
@@ -125,46 +170,6 @@ function OverallLeaderboardBase({
       ) : null}
 
       <section className="panel leaderboard-panel dashboard-table-panel">
-        <div className="leaderboard-toolbar">
-          <PlayerSearchAutocomplete
-            players={searchPlayers}
-            value={search}
-            onChange={onSearchChange}
-            onSelect={(playerId) => {
-              onPinPlayer(playerId)
-              onSearchChange(searchPlayers.find((p) => p.id === playerId)?.name ?? '')
-            }}
-            placeholder="Search players..."
-            ariaLabel="Search players"
-            className="leaderboard-search"
-          />
-          <div className="minimum-games-filter" role="group" aria-label="Minimum games">
-            {(
-              [
-                [0, 'All'],
-                [10, '10+ games'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={minimumGames === value ? 'active' : ''}
-                onClick={() => onMinimumGamesChange(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {isNarrowViewport && filteredStandings.length > COMPACT_LEADERBOARD_ROWS ? (
-            <button
-              type="button"
-              className="ghost-button leaderboard-range-button"
-              onClick={() => setShowAllRows((current) => !current)}
-            >
-              {showAllRows || search.trim().length > 0 ? 'Show top 10' : 'Show all players'}
-            </button>
-          ) : null}
-        </div>
         <div className="table-wrap leaderboard-table-wrap">
           <table className="leaderboard-table">
             <thead>
@@ -215,14 +220,6 @@ function OverallLeaderboardBase({
                   <tr
                     key={player.id}
                     className={`leaderboard-row${pinnedPlayerId === player.id ? ' pinned-row' : ''}`}
-                    tabIndex={0}
-                    onClick={() => onPlayerSelect(player.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        onPlayerSelect(player.id)
-                      }
-                    }}
                   >
                     <td
                       className={`rank-cell rank-pos-${rank <= 3 ? rank : 'other'}`}
@@ -237,7 +234,9 @@ function OverallLeaderboardBase({
                       )}
                     </td>
                     <td className="leaderboard-player-cell">
-                      <strong>{player.name}</strong>
+                      <a href={buildPublicRoute('players', { playerId: player.id })}>
+                        {player.name}
+                      </a>
                       {rankMovement !== 0 ? (
                         <span
                           className={`rank-movement ${rankMovement > 0 ? 'up' : 'down'}`}
@@ -280,6 +279,6 @@ function OverallLeaderboardBase({
           </p>
         ) : null}
       </section>
-    </>
+    </div>
   )
 }

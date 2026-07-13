@@ -1,20 +1,13 @@
 # Cloudflare Pages configuration for Pickleball Leaderboard
-# This project uses Next.js static export (output: 'export')
+# This project uses Next.js static export (output: 'export').
+# The build output in `out/` is uploaded via `wrangler pages deploy` (see
+# scripts/deploy-static.mjs) or by Cloudflare's GitHub integration.
 
-name = "pickleranker"
+name = "dlpickle"
 compatibility_date = "2024-01-01"
+pages_build_output_dir = "out"
 
-# Pages configuration
-[pages]
-# Build output directory (matches Next.js static export)
-output_directory = "out"
-
-# Build command
-[build.command]
-command = "npm run build"
-
-# Environment variables (optional - can also be set in dashboard)
-# [vars]
-# NEXT_PUBLIC_SUPABASE_URL = ""
-# NEXT_PUBLIC_SUPABASE_ANON_KEY = ""
-# NEXT_PUBLIC_SITE_URL = "https://dlpickle.pages.dev"
+# Environment variables are configured in the Cloudflare dashboard:
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   NEXT_PUBLIC_SITE_URL = "https://dlpickle.pages.dev"

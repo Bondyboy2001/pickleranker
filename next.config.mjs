@@ -15,7 +15,7 @@ const withPWA = withPWAInit({
 const nextConfig = {
   // Emit a fully static site (HTML/CSS/JS) to `out/`. The app is client-rendered
   // and talks to Supabase directly from the browser, so no server runtime is
-  // required. Vercel auto-detects the Next.js framework and serves this export.
+  // required. Cloudflare Pages serves this export from the `out/` directory.
   output: 'export',
   trailingSlash: true,
   reactStrictMode: true,

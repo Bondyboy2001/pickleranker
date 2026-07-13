@@ -3,9 +3,11 @@ import { formatRelativeTime } from '../lib/format'
 export function SyncStatus({
   lastSyncedAt,
   isLoading,
+  hasVisibleData,
 }: {
   lastSyncedAt: string | null
   isLoading: boolean
+  hasVisibleData: boolean
 }) {
   if (!lastSyncedAt && !isLoading) return null
 
@@ -14,7 +16,7 @@ export function SyncStatus({
       {isLoading ? (
         <>
           <span className="sync-dot syncing" aria-hidden="true" />
-          Syncing data...
+          {hasVisibleData ? 'Showing saved standings · updating…' : 'Syncing data…'}
         </>
       ) : lastSyncedAt ? (
         <>
