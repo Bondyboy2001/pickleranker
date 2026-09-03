@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { PlayerAutocomplete, PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { RatingChart } from './RatingChart'
 import {
@@ -6,6 +6,8 @@ import {
   DEFAULT_RATING,
 } from '../lib/standings'
 import { formatRating } from '../lib/scoring'
+import { playerTeam, sortMatches } from '../lib/data'
+import { formatSignedPoints, formatWinRate, weekLabel } from '../lib/format'
 import { buildPublicRoute } from '../lib/routing'
 import type { AppData, Match, PlayerStanding, PlayerWeekPoint, SortDirection } from '../lib/types'
 
@@ -41,37 +43,35 @@ type HistorySort = {
   direction: SortDirection
 }
 
-function formatWinRate(wins: number, games: number) {
-  if (games === 0) return '0.0%'
-  return `${((wins / games) * 100).toFixed(1)}%`
+function weekWinRate(week: PlayerWeekPoint) {
+  return week.games ? week.wins / week.games : 0
 }
 
-function compareNumber(left: number, right: number, direction: SortDirection) {
-  return direction === 'asc' ? left - right : right - left
+const HISTORY_COMPARATORS: Record<
+  HistorySortKey,
+  (left: PlayerWeekPoint, right: PlayerWeekPoint) => number
+> = {
+  // playedOn is ISO (YYYY-MM-DD), so string order is date order — no Date needed.
+  week: (left, right) => left.playedOn.localeCompare(right.playedOn),
+  games: (left, right) => left.games - right.games,
+  record: (left, right) =>
+    weekWinRate(left) - weekWinRate(right) ||
+    left.wins - right.wins ||
+    left.games - right.games,
+  points: (left, right) =>
+    left.pointsFor - left.pointsAgainst - (right.pointsFor - right.pointsAgainst) ||
+    left.pointsFor - right.pointsFor,
+  change: (left, right) => left.change - right.change,
 }
 
 function sortPlayerHistory(weeks: PlayerWeekPoint[], sort: HistorySort) {
-  return [...weeks].sort((left, right) => {
-    let result = 0
+  const directionMultiplier = sort.direction === 'asc' ? 1 : -1
+  const compare = HISTORY_COMPARATORS[sort.key]
 
-    if (sort.key === 'week') {
-      result = new Date(left.playedOn).getTime() - new Date(right.playedOn).getTime()
-    }
-    if (sort.key === 'games') result = left.games - right.games
-    if (sort.key === 'record') {
-      const leftRate = left.games ? left.wins / left.games : 0
-      const rightRate = right.games ? right.wins / right.games : 0
-      result = leftRate - rightRate || left.wins - right.wins || left.games - right.games
-    }
-    if (sort.key === 'points') {
-      result =
-        left.pointsFor - left.pointsAgainst - (right.pointsFor - right.pointsAgainst) ||
-        left.pointsFor - right.pointsFor
-    }
-    if (sort.key === 'change') result = left.change - right.change
-
-    return compareNumber(result, 0, sort.direction) || right.playedOn.localeCompare(left.playedOn)
-  })
+  return [...weeks].sort(
+    (left, right) =>
+      compare(left, right) * directionMultiplier || right.playedOn.localeCompare(left.playedOn),
+  )
 }
 
 function HistorySortableHeader({
@@ -107,18 +107,12 @@ function compareByName(left: MatchupStat, right: MatchupStat) {
   return left.name.localeCompare(right.name) || left.playerId.localeCompare(right.playerId)
 }
 
-function getPlayerTeam(match: Match, playerId: string) {
-  if (match.teamA.includes(playerId)) return 'A'
-  if (match.teamB.includes(playerId)) return 'B'
-  return null
-}
-
 function buildMatchupStats(playerId: string, data: AppData) {
   const playerNames = new Map(data.players.map((player) => [player.id, player.name]))
   const matchups = new Map<string, MatchupStat>()
 
   data.matches.forEach((match) => {
-    const team = getPlayerTeam(match, playerId)
+    const team = playerTeam(match, playerId)
     if (!team) return
 
     const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
@@ -160,14 +154,11 @@ function buildMatchupStats(playerId: string, data: AppData) {
 }
 
 function chronologicalPlayerResults(playerId: string, matches: Match[]) {
-  return matches
-    .filter((match) => getPlayerTeam(match, playerId))
-    .sort((a, b) => a.playedOn.localeCompare(b.playedOn) || a.id.localeCompare(b.id))
-    .map((match) => {
-      const team = getPlayerTeam(match, playerId)
-      const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
-      return won ? 'W' : ('L' as 'W' | 'L')
-    })
+  return sortMatches(matches.filter((match) => playerTeam(match, playerId))).map((match) => {
+    const team = playerTeam(match, playerId)
+    const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
+    return won ? 'W' : ('L' as 'W' | 'L')
+  })
 }
 
 function buildPlayerForm(playerId: string, matches: Match[]) {
@@ -195,7 +186,7 @@ function buildBestPartner(playerId: string, data: AppData): PartnerStat | null {
   const partners = new Map<string, { wins: number; games: number }>()
 
   data.matches.forEach((match) => {
-    const team = getPlayerTeam(match, playerId)
+    const team = playerTeam(match, playerId)
     if (!team) return
     const teammates = team === 'A' ? match.teamA : match.teamB
     const partnerId = teammates.find((id) => id !== playerId)
@@ -243,8 +234,8 @@ function buildHeadToHeadStats(playerAId: string, playerBId: string, matches: Mat
   }
 
   matches.forEach((match) => {
-    const playerATeam = getPlayerTeam(match, playerAId)
-    const playerBTeam = getPlayerTeam(match, playerBId)
+    const playerATeam = playerTeam(match, playerAId)
+    const playerBTeam = playerTeam(match, playerBId)
     if (!playerATeam || !playerBTeam || playerATeam === playerBTeam) return
 
     const playerAPoints = playerATeam === 'A' ? match.scoreA : match.scoreB
@@ -257,10 +248,10 @@ function buildHeadToHeadStats(playerAId: string, playerBId: string, matches: Mat
     stats.pointsA += playerAPoints
     stats.pointsB += playerBPoints
     stats.sharedMatches.push(match)
-    if (!stats.latest || match.playedOn > stats.latest.playedOn) stats.latest = match
   })
 
   stats.sharedMatches.sort((a, b) => b.playedOn.localeCompare(a.playedOn) || b.id.localeCompare(a.id))
+  stats.latest = stats.sharedMatches[0] ?? null
   return stats
 }
 
@@ -335,7 +326,8 @@ function PlayerProfileDetail({
       setShareLabel('Link copied!')
       window.setTimeout(() => setShareLabel('Share'), 2000)
     } catch {
-      // User dismissed the share sheet, or clipboard was blocked — leave the label as-is.
+      setShareLabel('Copy failed')
+      window.setTimeout(() => setShareLabel('Share'), 2500)
     }
   }
 
@@ -398,7 +390,7 @@ function PlayerProfileDetail({
           <strong>{formatWinRate(player.wins, player.games)}</strong>
         </div>
         <div>
-          <span>Point +/−</span>
+          <span>Point differential</span>
           <strong>
             {player.pointsFor - player.pointsAgainst >= 0 ? '+' : ''}
             {player.pointsFor - player.pointsAgainst}
@@ -444,14 +436,14 @@ function PlayerProfileDetail({
         </div>
         <div>
           <span>Best week</span>
-          <strong className="positive">
-            {stats.bestWeek ? `+${stats.bestWeek.change.toFixed(3)}` : '—'}
+          <strong className={stats.bestWeek && stats.bestWeek.change < 0 ? 'negative' : 'positive'}>
+            {stats.bestWeek ? formatSignedPoints(stats.bestWeek.change) : '—'}
           </strong>
         </div>
         <div>
           <span>Worst week</span>
-          <strong className="negative">
-            {stats.worstWeek ? stats.worstWeek.change.toFixed(3) : '—'}
+          <strong className={stats.worstWeek && stats.worstWeek.change >= 0 ? 'positive' : 'negative'}>
+            {stats.worstWeek ? formatSignedPoints(stats.worstWeek.change) : '—'}
           </strong>
         </div>
         <div>
@@ -465,6 +457,7 @@ function PlayerProfileDetail({
       </div>
 
       <RatingChart
+        key={player.id}
         weeks={weeks}
         startRating={DEFAULT_RATING}
       />
@@ -504,7 +497,7 @@ function PlayerProfileDetail({
                     onSort={toggleHistorySort}
                   />
                   <HistorySortableHeader
-                    label="4DR +/-"
+                    label="4DR change"
                     sortKey="change"
                     activeSort={historySort}
                     onSort={toggleHistorySort}
@@ -517,6 +510,8 @@ function PlayerProfileDetail({
                     key={week.key}
                     className="players-history-row"
                     tabIndex={0}
+                    role="button"
+                    aria-label={`Open ${week.label} in weekly view`}
                     onClick={() => onOpenWeeklyWeek(player.id, week.key)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -534,8 +529,7 @@ function PlayerProfileDetail({
                       {week.pointsFor}-{week.pointsAgainst}
                     </td>
                     <td className={week.change >= 0 ? 'positive' : 'negative'}>
-                      {week.change >= 0 ? '+' : ''}
-                      {week.change.toFixed(3)}
+                      {formatSignedPoints(week.change)}
                     </td>
                   </tr>
                 ))}
@@ -553,12 +547,17 @@ function PlayerProfileDetail({
 function HeadToHeadPanel({
   data,
   standings,
+  playerAId,
+  playerBId,
+  onChange,
 }: {
   data: AppData
   standings: PlayerStanding[]
+  playerAId: string
+  playerBId: string
+  onChange: (playerAId: string, playerBId: string) => void
 }) {
-  const [playerAId, setPlayerAId] = useState('')
-  const [playerBId, setPlayerBId] = useState('')
+  const [shareLabel, setShareLabel] = useState('Share comparison')
 
   const playerA = useMemo(
     () => standings.find((player) => player.id === playerAId) ?? null,
@@ -590,27 +589,63 @@ function HeadToHeadPanel({
         : 'tied'
     : 'tied'
 
+  async function shareComparison() {
+    if (!playerA || !playerB) return
+    const url = `${window.location.origin}${buildPublicRoute('players', {
+      playerId: playerA.id,
+      comparePlayerAId: playerA.id,
+      comparePlayerBId: playerB.id,
+    })}`
+    const shareData = {
+      title: `${playerA.name} vs ${playerB.name} · DL Cardiff Pickleball`,
+      text: `${playerA.name} and ${playerB.name} head to head`,
+      url,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      setShareLabel('Link copied!')
+      window.setTimeout(() => setShareLabel('Share comparison'), 2000)
+    } catch {
+      setShareLabel('Copy failed — long-press the URL')
+      window.setTimeout(() => setShareLabel('Share comparison'), 2500)
+    }
+  }
+
   return (
     <section className="panel head-to-head-panel">
       <div className="head-to-head-head">
         <div>
           <span className="eyebrow">Head to head</span>
           <h2>Compare players</h2>
+          <p className="head-to-head-note">Only games on opposite teams count — same-team games are ignored.</p>
         </div>
+        {playerA && playerB && stats ? (
+          <button
+            type="button"
+            className="players-share-button head-to-head-share-button"
+            onClick={shareComparison}
+          >
+            {shareLabel}
+          </button>
+        ) : null}
       </div>
 
       <div className="head-to-head-inputs">
         <PlayerAutocomplete
           players={standings}
           value={playerAId}
-          onChange={setPlayerAId}
+          onChange={(nextPlayerAId) => onChange(nextPlayerAId, playerBId)}
           excludeIds={playerBId ? [playerBId] : []}
           placeholder="First player"
         />
         <PlayerAutocomplete
           players={standings}
           value={playerBId}
-          onChange={setPlayerBId}
+          onChange={(nextPlayerBId) => onChange(playerAId, nextPlayerBId)}
           excludeIds={playerAId ? [playerAId] : []}
           placeholder="Second player"
         />
@@ -656,22 +691,22 @@ function HeadToHeadPanel({
               <span>Latest</span>
               <strong>
                 {stats.latest
-                  ? `${getPlayerTeam(stats.latest, playerA.id) === 'A' ? stats.latest.scoreA : stats.latest.scoreB}-${getPlayerTeam(stats.latest, playerB.id) === 'A' ? stats.latest.scoreA : stats.latest.scoreB}`
+                  ? `${playerTeam(stats.latest, playerA.id) === 'A' ? stats.latest.scoreA : stats.latest.scoreB}-${playerTeam(stats.latest, playerB.id) === 'A' ? stats.latest.scoreA : stats.latest.scoreB}`
                   : '—'}
               </strong>
-              {stats.latest ? <small>{stats.latest.week.replace(/^Results\s+/, '')}</small> : null}
+              {stats.latest ? <small>{weekLabel(stats.latest.week)}</small> : null}
             </div>
           </div>
 
           {stats.sharedMatches.length > 0 ? (
             <ul className="head-to-head-games">
               {stats.sharedMatches.map((match) => {
-                const scoreA = getPlayerTeam(match, playerA.id) === 'A' ? match.scoreA : match.scoreB
-                const scoreB = getPlayerTeam(match, playerB.id) === 'A' ? match.scoreA : match.scoreB
+                const scoreA = playerTeam(match, playerA.id) === 'A' ? match.scoreA : match.scoreB
+                const scoreB = playerTeam(match, playerB.id) === 'A' ? match.scoreA : match.scoreB
                 const playerAWon = scoreA > scoreB
                 return (
                   <li key={match.id}>
-                    <span>{match.week.replace(/^Results\s+/, '')}</span>
+                    <span>{weekLabel(match.week)}</span>
                     <strong className={playerAWon ? 'positive' : 'negative'}>
                       {scoreA}-{scoreB}
                     </strong>
@@ -695,14 +730,20 @@ function PlayersPanelBase({
   standings,
   rankByPlayerId,
   selectedPlayerId,
+  comparePlayerAId,
+  comparePlayerBId,
   onSelectPlayer,
+  onComparisonChange,
   onOpenWeeklyWeek,
 }: {
   data: AppData
   standings: PlayerStanding[]
   rankByPlayerId: Map<string, number>
   selectedPlayerId: string | null
+  comparePlayerAId: string
+  comparePlayerBId: string
   onSelectPlayer: (playerId: string) => void
+  onComparisonChange: (playerAId: string, playerBId: string) => void
   onOpenWeeklyWeek: (playerId: string, week: string) => void
 }) {
   const [search, setSearch] = useState('')
@@ -714,31 +755,37 @@ function PlayersPanelBase({
   )
 
   const selectedWeeks = useMemo(
-    () => (selectedPlayer ? buildPlayerRatingWeeks(selectedPlayer.id, data, 'fromDefault') : []),
+    () => (selectedPlayer ? buildPlayerRatingWeeks(selectedPlayer.id, data) : []),
     [selectedPlayer, data],
   )
   const totalWeeks = useMemo(() => countLeagueWeeks(data), [data])
 
   const searchPlayers = standings.map((player) => ({ id: player.id, name: player.name }))
 
+  useEffect(() => {
+    if (selectedPlayer) setSearch(selectedPlayer.name)
+  }, [selectedPlayer])
+
   return (
-    <div className="players-workspace">
-      <div className="players-main-column">
-        <section className="panel players-list-panel">
-          <div className="panel-heading players-heading">
-            <PlayerSearchAutocomplete
-              players={searchPlayers}
-              value={search}
-              onChange={setSearch}
-              onSelect={onSelectPlayer}
-              placeholder="Find your player profile…"
-              ariaLabel="Find your player profile"
-              className="players-search"
-            />
+    <div className={selectedPlayer ? 'players-workspace' : 'players-workspace no-profile'}>
+      <h1 className="visually-hidden">Cardiff pickleball player profiles and head-to-head</h1>
+      <section className="panel players-list-panel">
+        <div className="panel-heading players-heading">
+          <div className="players-search-copy">
+            <span className="eyebrow">Player profiles</span>
+            <h2>Find a player</h2>
           </div>
-        </section>
-        <HeadToHeadPanel data={data} standings={standings} />
-      </div>
+          <PlayerSearchAutocomplete
+            players={searchPlayers}
+            value={search}
+            onChange={setSearch}
+            onSelect={onSelectPlayer}
+            placeholder="Search by player name…"
+            ariaLabel="Find your player profile"
+            className="players-search"
+          />
+        </div>
+      </section>
 
       {selectedPlayer ? (
         <PlayerProfileDetail
@@ -749,12 +796,15 @@ function PlayersPanelBase({
           weeks={selectedWeeks}
           onOpenWeeklyWeek={onOpenWeeklyWeek}
         />
-      ) : (
-        <aside className="panel players-profile-panel empty">
-          <h2>Player overview</h2>
-          <p>Search for yourself to see your statistics, recent form, and rating history.</p>
-        </aside>
-      )}
+      ) : null}
+
+      <HeadToHeadPanel
+        data={data}
+        standings={standings}
+        playerAId={comparePlayerAId}
+        playerBId={comparePlayerBId}
+        onChange={onComparisonChange}
+      />
     </div>
   )
 }

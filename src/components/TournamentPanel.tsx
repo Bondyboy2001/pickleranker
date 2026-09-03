@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { AdminField } from './AdminField'
+import { ConfirmDialog } from './ConfirmDialog'
 import { DatePicker } from './DatePicker'
 import { PlayerPickerDialog } from './PlayerPickerDialog'
 import { ScoreInput } from './ScoreInput'
@@ -27,14 +28,21 @@ import {
   saveRemoteTournament,
 } from '../lib/tournamentStorage'
 import {
+  addTournamentPlayer,
   buildNextRound,
+  clampCourtCount,
   courtMovement,
   createTournament,
+  defaultCourtCount,
   gameHasAllPlayers,
   isRoundComplete,
+  normalizeTournamentState,
   parseGameScores,
-  rankCourtPlayers,
   rebuildRoundsAfter,
+  removeTournamentPlayer,
+  roundCourtRankings,
+  setTournamentCourts,
+  syncGameSitOuts,
   type CourtMovement,
   type TournamentGame,
   type TournamentRound,
@@ -196,12 +204,21 @@ function TournamentRoundView({
 }) {
   const gameCount = Math.max(...round.courts.map((court) => court.games.length))
   const roundComplete = isRoundComplete(round)
+  // Court finish order, grouped the same way the ladder groups players, so each
+  // player shows up once even when the rotation moved them across courts. Both
+  // lists are in court-number order, so they line up by index.
+  const orderedCourts = [...round.courts].sort((a, b) => a.court - b.court)
+  const rankings = roundComplete ? roundCourtRankings(round, seedOrderIds) : []
 
   return (
     <>
       <div className="tournament-game-list">
         {Array.from({ length: gameCount }, (_, gameIndex) => {
-          const sitOutIds = round.courts[0]?.games[gameIndex]?.sitOutIds ?? []
+          const sitOutIds = [
+            ...new Set(
+              round.courts.flatMap((court) => court.games[gameIndex]?.sitOutIds ?? []),
+            ),
+          ]
           const skipped = round.courts[0]?.games[gameIndex]?.skipped ?? false
           // Courts can hold different game counts (e.g. a reopened tournament
           // rebuilt from saved scores), so this seat may not exist on every court.
@@ -321,15 +338,20 @@ function TournamentRoundView({
 
       {roundComplete ? (
         <section className="tournament-results-grid" aria-label="Round results">
-          {round.courts.map((court) => {
-            const courtCount = round.courts.length
-            const ranking = rankCourtPlayers(court, seedOrderIds)
+          {rankings.map((ranking, courtIndex) => {
+            const court = orderedCourts[courtIndex]
+            const courtCount = orderedCourts.length
+            // Players sit out different games, so a court's finish can mix
+            // players who played two games with players who played three.
+            const unevenGames = ranking.some(
+              (result) => result.gamesPlayed !== ranking[0].gamesPlayed,
+            )
             return (
               <article className="tournament-court-results" key={court.court}>
                 <span className="tournament-results-label">Court {court.court} finish</span>
                 <div className="tournament-court-standings">
                   {ranking.map((result, index) => {
-                    const move = courtMovement(index, court.court, courtCount)
+                    const move = courtMovement(index, court.court, courtCount, ranking.length)
                     const moveLabel =
                       move === 'up'
                         ? `↑ Court ${court.court - 1}`
@@ -341,7 +363,8 @@ function TournamentRoundView({
                         key={result.playerId}
                         className={`tournament-rank ${MOVE_CLASS[move]}`}
                       >
-                        {index + 1}. {nameOf(result.playerId)} · {result.wins}W ·{' '}
+                        {index + 1}. {nameOf(result.playerId)} · {result.wins}W
+                        {unevenGames ? `/${result.gamesPlayed}` : ''} ·{' '}
                         {result.pointDiff >= 0 ? '+' : ''}
                         {result.pointDiff}
                         <span className="tournament-rank-move">{moveLabel}</span>
@@ -374,6 +397,8 @@ export function TournamentPanel({
   const [tournament, setTournament] = useState<TournamentState | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [playedOn, setPlayedOn] = useState(() => new Date().toISOString().slice(0, 10))
+  // Courts available at the venue. Null means "as many as the roster fills".
+  const [courtCount, setCourtCount] = useState<number | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [activeRoundIndex, setActiveRoundIndex] = useState(0)
@@ -384,6 +409,13 @@ export function TournamentPanel({
   const [editLineups, setEditLineups] = useState(false)
   const [isDemoTournament, setIsDemoTournament] = useState(false)
   const [tournamentNotice, setTournamentNotice] = useState('')
+  const [pendingConfirm, setPendingConfirm] = useState<
+    | { kind: 'courts'; next: number; droppedRounds: number }
+    | { kind: 'rebuild'; roundIndex: number; laterCount: number }
+    | { kind: 'finish'; count: number }
+    | { kind: 'cancel' }
+    | null
+  >(null)
 
   useEffect(() => {
     let cancelled = false
@@ -391,7 +423,7 @@ export function TournamentPanel({
     // than the active draft. The draft auto-save then keeps it as the working
     // tournament until it's re-finished.
     if (openTournament) {
-      setTournament(openTournament)
+      setTournament(normalizeTournamentState(openTournament))
       setActiveRoundIndex(Math.max(0, openTournament.rounds.length - 1))
       setSelectedIds([])
       setFormError('')
@@ -405,8 +437,9 @@ export function TournamentPanel({
     void loadRemoteTournament().then((stored) => {
       if (cancelled) return
       if (stored) {
-        setTournament(stored)
-        setActiveRoundIndex(stored.rounds.length - 1)
+        const normalized = normalizeTournamentState(stored)
+        setTournament(normalized)
+        setActiveRoundIndex(normalized.rounds.length - 1)
       }
       setTournamentLoaded(true)
     })
@@ -452,6 +485,12 @@ export function TournamentPanel({
     [selectedIds, standings],
   )
 
+  // Courts for the setup screen. Null = auto (as many courts as the roster
+  // fills); a picked value sticks but is clamped when the roster shrinks.
+  const maxSetupCourts = defaultCourtCount(seededSelection.length)
+  const setupCourts =
+    courtCount === null ? maxSetupCourts : clampCourtCount(courtCount, seededSelection.length)
+
   function togglePlayer(playerId: string) {
     setFormError('')
     setSelectedIds((current) =>
@@ -480,7 +519,8 @@ export function TournamentPanel({
     setActiveRoundIndex(0)
     setTournamentLoaded(true)
     setIsDemoTournament(false)
-    setTournament(createTournament(seededSelection, playedOn))
+    setTournament(createTournament(seededSelection, playedOn, Math.random, setupCourts))
+    setCourtCount(null)
   }
 
   function loadDemoTournament() {
@@ -576,62 +616,94 @@ export function TournamentPanel({
       const playerIds = current.playerIds.includes(playerId)
         ? current.playerIds
         : [...current.playerIds, playerId]
+      // The substitution changes who is on court, so who is resting this game
+      // has to move with it.
+      const updated = syncGameSitOuts({ ...round, courts })
       return {
         ...current,
         playerIds,
-        rounds: current.rounds.map((entry, index) =>
-          index === roundIndex ? { ...round, courts } : entry,
-        ),
+        rounds: current.rounds.map((entry, index) => (index === roundIndex ? updated : entry)),
       }
     })
   }
 
-  // Add a player to the tournament roster, or remove one. Removing a player who
-  // has already completed the active source round keeps those historical games
-  // intact, but clears them from later rounds so the next-round generator can
-  // reseed from the remaining roster.
+  // Add a player to the tournament roster, or remove one. Rounds with played
+  // content keep their history; unplayed rounds are regenerated to match the
+  // new roster, and a removed player's seats in partially-played rounds are
+  // emptied for refilling via Edit Round.
   function toggleTournamentPlayer(playerId: string) {
     if (!tournament) return
     setFormError('')
     setDraftSavedAt(null)
+    const name = playerNameById.get(playerId) ?? 'Player'
     const inRoster = tournament.playerIds.includes(playerId)
     if (!inRoster) {
-      setTournament((current) =>
-        current ? { ...current, playerIds: [...current.playerIds, playerId] } : current,
+      const { state, regeneratedRounds, joinsRound } = addTournamentPlayer(
+        tournament,
+        playerId,
+        activeRoundIndex,
+      )
+      setTournament(state)
+      setTournamentNotice(
+        joinsRound === null
+          ? `${name} is already in the tournament.`
+          : regeneratedRounds > 0
+            ? `${name} added — plays from Round ${joinsRound} (upcoming rounds regenerated).`
+            : `${name} added — joins from Round ${joinsRound}.`,
       )
       return
     }
 
-    const blankSlot = (id: string) => (id === playerId ? '' : id)
-    setTournament((current) => {
-      if (!current) return current
-      const satOutCounts = { ...current.satOutCounts }
-      delete satOutCounts[playerId]
-      const shouldKeepRoundLineups = (roundIndex: number, round: TournamentRound) =>
-        roundIndex < activeRoundIndex || (roundIndex === activeRoundIndex && isRoundComplete(round))
-      return {
-        ...current,
-        playerIds: current.playerIds.filter((id) => id !== playerId),
-        satOutCounts,
-        rounds: current.rounds.map((round, roundIndex) => {
-          if (shouldKeepRoundLineups(roundIndex, round)) return round
-          return {
-            ...round,
-            sitOutIds: round.sitOutIds.filter((id) => id !== playerId),
-            courts: round.courts.map((court) => ({
-              ...court,
-              playerIds: court.playerIds.filter((id) => id !== playerId),
-              games: court.games.map((game) => ({
-                ...game,
-                teamA: [blankSlot(game.teamA[0]), blankSlot(game.teamA[1])] as [string, string],
-                teamB: [blankSlot(game.teamB[0]), blankSlot(game.teamB[1])] as [string, string],
-                sitOutIds: game.sitOutIds?.filter((id) => id !== playerId),
-              })),
-            })),
-          }
-        }),
-      }
-    })
+    const { state, clearedSeats, regeneratedRounds } = removeTournamentPlayer(
+      tournament,
+      playerId,
+      activeRoundIndex,
+    )
+    setTournament(state)
+    const seatsNote =
+      clearedSeats > 0
+        ? ` ${clearedSeats} empty seat${clearedSeats === 1 ? '' : 's'} to fill via “Edit Round”.`
+        : ''
+    const regenNote =
+      regeneratedRounds > 0
+        ? ` Upcoming round${regeneratedRounds === 1 ? '' : 's'} regenerated without them.`
+        : ''
+    const courtsNote =
+      state.playerIds.length < state.courtCount * 4
+        ? ` Only ${state.playerIds.length} players left for ${state.courtCount} courts — add players or lower the court count.`
+        : ''
+    setTournamentNotice(`${name} removed.${seatsNote}${regenNote}${courtsNote}`)
+  }
+
+  // Change how many courts are in play. Rounds with scores are kept; unscored
+  // rounds are cleared and the next round is rebuilt on the new court count.
+  // Allowed in demo mode too (demos never touch the leaderboard anyway).
+  function applyCourtCount(next: number) {
+    if (!tournament) return
+    const clamped = clampCourtCount(next, tournament.playerIds.length)
+    const preview = setTournamentCourts(tournament, clamped)
+    setTournament(preview.state)
+    setActiveRoundIndex((index) => Math.min(index, preview.state.rounds.length - 1))
+    setDraftSavedAt(null)
+    setFormError('')
+    setTournamentNotice(
+      preview.rebuilt
+        ? `Now playing on ${clamped} court${clamped === 1 ? '' : 's'} — next round rebuilt.`
+        : `Court count set to ${clamped} for upcoming rounds.`,
+    )
+  }
+
+  function changeCourtCount(next: number) {
+    if (!tournament) return
+    const clamped = clampCourtCount(next, tournament.playerIds.length)
+    const current = tournament.courtCount ?? defaultCourtCount(tournament.playerIds.length)
+    if (clamped === current) return
+    const preview = setTournamentCourts(tournament, clamped)
+    if (preview.droppedRounds > 0) {
+      setPendingConfirm({ kind: 'courts', next: clamped, droppedRounds: preview.droppedRounds })
+      return
+    }
+    applyCourtCount(clamped)
   }
 
   async function saveProgress() {
@@ -669,10 +741,13 @@ export function TournamentPanel({
     }
     const laterCount = tournament.rounds.length - roundIndex - 1
     if (laterCount === 0) return
-    const confirmed = window.confirm(
-      `Rebuild the ${laterCount} round${laterCount === 1 ? '' : 's'} after Round ${round.round} from these scores? Any scores already entered in those later rounds will be cleared.`,
-    )
-    if (!confirmed) return
+    setPendingConfirm({ kind: 'rebuild', roundIndex, laterCount })
+  }
+
+  function applyRebuild(roundIndex: number) {
+    if (!tournament) return
+    const round = tournament.rounds[roundIndex]
+    const laterCount = tournament.rounds.length - roundIndex - 1
     setTournament(rebuildRoundsAfter(tournament, roundIndex))
     setActiveRoundIndex(roundIndex + 1)
     setFormError('')
@@ -684,13 +759,8 @@ export function TournamentPanel({
   // Commit the tournament to the leaderboard, then clear it. Games that were
   // never scored (ran out of time) or still have a missing player are simply
   // skipped — only completed games are saved.
-  async function finishTournament() {
-    if (!tournament) return
-    if (isDemoMode) {
-      setFormError('Demo tournaments are for testing only. End the demo instead of saving it.')
-      return
-    }
-
+  function collectTournamentMatches(): Match[] | null {
+    if (!tournament) return null
     // Every game in every round must be scored or skipped before finishing, so a
     // half-entered bracket can't be committed to the leaderboard.
     const incompleteIndex = tournament.rounds.findIndex((round) => !isRoundComplete(round))
@@ -699,7 +769,7 @@ export function TournamentPanel({
       setFormError(
         `Enter a score for every game (or skip it) in Round ${tournament.rounds[incompleteIndex].round} before finishing the tournament.`,
       )
-      return
+      return null
     }
 
     // A scored game must have four distinct players or the leaderboard will
@@ -720,7 +790,7 @@ export function TournamentPanel({
       setFormError(
         `Fix the line-up (a missing or repeated player) in ${problems.join(', ')} before finishing.`,
       )
-      return
+      return null
     }
 
     const matches: Match[] = tournament.rounds.flatMap((round) =>
@@ -742,6 +812,7 @@ export function TournamentPanel({
               scoreB: winnerIsA ? scores.scoreB : scores.scoreA,
               round: round.round,
               court: court.court,
+              source: 'tournament' as const,
             },
           ]
         }),
@@ -750,15 +821,32 @@ export function TournamentPanel({
 
     if (matches.length === 0) {
       setFormError('Enter at least one game score before finishing (or “End tournament” to discard).')
+      return null
+    }
+    return matches
+  }
+
+  async function finishTournament() {
+    if (!tournament) return
+    if (isDemoMode) {
+      setFormError('Demo tournaments are for testing only. End the demo instead of saving it.')
       return
     }
-
+    const matches = collectTournamentMatches()
+    if (!matches) return
     // Final confirmation — this commits the scores and updates everyone's
     // rankings, so make the user opt in before it happens.
-    const confirmed = window.confirm(
-      `Finish this tournament and save ${matches.length} game${matches.length === 1 ? '' : 's'} to the leaderboard? This updates everyone's rankings and can't be undone from here.`,
-    )
-    if (!confirmed) return
+    setPendingConfirm({ kind: 'finish', count: matches.length })
+  }
+
+  async function confirmFinishTournament() {
+    if (!tournament) return
+    const matches = collectTournamentMatches()
+    if (!matches) {
+      setPendingConfirm(null)
+      return
+    }
+    setPendingConfirm(null)
 
     setSaving(true)
     const saved = await saveRoundMatches(matches)
@@ -781,6 +869,7 @@ export function TournamentPanel({
     setEditLineups(false)
     setIsDemoTournament(false)
     setTournamentNotice('')
+    setCourtCount(null)
     onFinished?.()
   }
 
@@ -812,20 +901,22 @@ export function TournamentPanel({
   }
 
   function cancelTournament() {
-    if (!window.confirm('End this tournament? Unsaved scores in the current round will be lost.')) {
-      return
-    }
+    setPendingConfirm({ kind: 'cancel' })
+  }
+
+  function applyCancelTournament() {
+    setPendingConfirm(null)
     setTournament(null)
     setSelectedIds([])
     setActiveRoundIndex(0)
     setFormError('')
     setIsDemoTournament(false)
     setTournamentNotice('')
+    setCourtCount(null)
   }
 
   if (!tournament) {
-    const courtCount = Math.floor(seededSelection.length / 4)
-    const sitOutCount = seededSelection.length % 4
+    const setupSitOuts = Math.max(0, seededSelection.length - setupCourts * 4)
 
     return (
       <section className="panel tournament-panel tournament-setup">
@@ -844,6 +935,18 @@ export function TournamentPanel({
           <AdminField label="Date">
             <DatePicker value={playedOn} onChange={(value) => setPlayedOn(value)} />
           </AdminField>
+          <AdminField label="Courts available">
+            <ScoreInput
+              value={String(setupCourts)}
+              min={1}
+              ariaLabel="Courts available"
+              onChange={(value) => {
+                const next = Number(value.replace(/\D/g, ''))
+                if (!Number.isFinite(next) || value === '') return
+                setCourtCount(clampCourtCount(next, seededSelection.length))
+              }}
+            />
+          </AdminField>
           <div className="tournament-stat-pills">
             <span className="tournament-stat-pill">
               <Users size={15} aria-hidden />
@@ -851,11 +954,11 @@ export function TournamentPanel({
             </span>
             <span className="tournament-stat-pill">
               <Trophy size={15} aria-hidden />
-              {courtCount} court{courtCount === 1 ? '' : 's'}
+              {setupCourts} court{setupCourts === 1 ? '' : 's'}
             </span>
-            {sitOutCount > 0 ? (
+            {setupSitOuts > 0 ? (
               <span className="tournament-stat-pill muted">
-                {sitOutCount} random sit-out{sitOutCount === 1 ? '' : 's'} per round
+                {setupSitOuts} rotating sit-out{setupSitOuts === 1 ? '' : 's'} per game
               </span>
             ) : null}
           </div>
@@ -969,6 +1072,11 @@ export function TournamentPanel({
           <span className="tournament-meta-chip">
             <Users size={15} aria-hidden />
             {tournament.playerIds.length} players
+          </span>
+          <span className="tournament-meta-chip">
+            <Trophy size={15} aria-hidden />
+            {tournament.courtCount ?? defaultCourtCount(tournament.playerIds.length)} court
+            {(tournament.courtCount ?? defaultCourtCount(tournament.playerIds.length)) === 1 ? '' : 's'}
           </span>
           <span className="tournament-meta-chip">
             <Check size={15} aria-hidden />
@@ -1110,6 +1218,61 @@ export function TournamentPanel({
         onToggle={toggleTournamentPlayer}
         onClear={() => setFormError('Remove players one at a time so the matches stay intact.')}
         onClose={() => setPickerOpen(false)}
+        courtCount={tournament.courtCount ?? defaultCourtCount(tournament.playerIds.length)}
+        maxCourtCount={defaultCourtCount(tournament.playerIds.length)}
+        sitOutCount={Math.max(
+          0,
+          tournament.playerIds.length -
+            (tournament.courtCount ?? defaultCourtCount(tournament.playerIds.length)) * 4,
+        )}
+        onCourtCountChange={changeCourtCount}
+      />
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={
+          pendingConfirm?.kind === 'courts'
+            ? `Switch to ${pendingConfirm.next} court${pendingConfirm.next === 1 ? '' : 's'}?`
+            : pendingConfirm?.kind === 'rebuild'
+              ? `Rebuild rounds after Round ${tournament.rounds[pendingConfirm.roundIndex]?.round ?? ''}?`
+              : pendingConfirm?.kind === 'finish'
+                ? `Finish tournament and save ${pendingConfirm.count} game${pendingConfirm.count === 1 ? '' : 's'}?`
+                : 'End this tournament?'
+        }
+        message={
+          pendingConfirm?.kind === 'courts'
+            ? `This clears ${pendingConfirm.droppedRounds} unscored round${pendingConfirm.droppedRounds === 1 ? '' : 's'} and rebuilds the next round. Scored games are kept.`
+            : pendingConfirm?.kind === 'rebuild'
+              ? `Any scores already entered in those later rounds will be cleared.`
+              : pendingConfirm?.kind === 'finish'
+                ? `This updates everyone's rankings and can't be undone from here.`
+                : 'Unsaved scores in the current round will be lost.'
+        }
+        confirmLabel={
+          pendingConfirm?.kind === 'courts'
+            ? 'Switch courts'
+            : pendingConfirm?.kind === 'rebuild'
+              ? 'Rebuild rounds'
+              : pendingConfirm?.kind === 'finish'
+                ? 'Finish tournament'
+                : 'End tournament'
+        }
+        danger={pendingConfirm?.kind === 'cancel' || pendingConfirm?.kind === 'finish'}
+        onConfirm={() => {
+          const confirm = pendingConfirm
+          if (!confirm) return
+          if (confirm.kind === 'courts') {
+            setPendingConfirm(null)
+            applyCourtCount(confirm.next)
+          } else if (confirm.kind === 'rebuild') {
+            setPendingConfirm(null)
+            applyRebuild(confirm.roundIndex)
+          } else if (confirm.kind === 'finish') {
+            void confirmFinishTournament()
+          } else {
+            applyCancelTournament()
+          }
+        }}
+        onCancel={() => setPendingConfirm(null)}
       />
     </section>
   )

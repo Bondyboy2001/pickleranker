@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, RotateCcw, Search, Users, X } from 'lucide-react'
 import { FieldInputWrap } from './AdminField'
+import { ScoreInput } from './ScoreInput'
 
 type Player = { id: string; name: string }
 
@@ -11,6 +12,10 @@ export function PlayerPickerDialog({
   onToggle,
   onClear,
   onClose,
+  courtCount,
+  maxCourtCount,
+  sitOutCount,
+  onCourtCountChange,
 }: {
   open: boolean
   players: Player[]
@@ -18,6 +23,12 @@ export function PlayerPickerDialog({
   onToggle: (playerId: string) => void
   onClear: () => void
   onClose: () => void
+  // Optional courts control (tournament mid-game management). Shown only when
+  // the change handler is provided.
+  courtCount?: number
+  maxCourtCount?: number
+  sitOutCount?: number
+  onCourtCountChange?: (count: number) => void
 }) {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -155,6 +166,29 @@ export function PlayerPickerDialog({
         </div>
 
         <div className="player-picker-foot">
+          {onCourtCountChange && courtCount !== undefined ? (
+            <div className="player-picker-courts">
+              <span className="player-picker-courts-label">Courts available</span>
+              <ScoreInput
+                value={String(courtCount)}
+                min={1}
+                ariaLabel="Courts available"
+                onChange={(value) => {
+                  if (value === '') return
+                  const next = Number(value.replace(/\D/g, ''))
+                  if (!Number.isFinite(next)) return
+                  onCourtCountChange(
+                    maxCourtCount !== undefined ? Math.min(next, maxCourtCount) : next,
+                  )
+                }}
+              />
+              {sitOutCount !== undefined && sitOutCount > 0 ? (
+                <span className="player-picker-courts-hint">
+                  {sitOutCount} sit{sitOutCount === 1 ? 's' : ''} out per game
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <span className="player-picker-count">
             <Users size={15} aria-hidden /> {selectedIds.length} selected
           </span>

@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import { DEFAULT_RATING } from '../lib/standings'
+import { formatShortWeekLabel, formatWeekLabel } from '../lib/format'
 import { formatRating, roundRating } from '../lib/scoring'
 import type { PlayerWeekPoint } from '../lib/types'
 
@@ -9,20 +10,6 @@ const CHART_HEIGHT = 460
 const PADDING_X = 44
 const PADDING_TOP = 24
 const PADDING_BOTTOM = 40
-
-function formatWeekLabel(label: string) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const match = label.match(/(\d{1,2})-(\d{2})-(\d{4})/)
-  if (!match) return label
-  return `${parseInt(match[1], 10)} ${months[parseInt(match[2], 10) - 1]} ${match[3]}`
-}
-
-function formatShortWeekLabel(label: string) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const match = label.match(/(\d{1,2})-(\d{2})-(\d{4})/)
-  if (!match) return label.slice(0, 6)
-  return `${parseInt(match[1], 10)} ${months[parseInt(match[2], 10) - 1]}`
-}
 
 function buildYTicks(minRating: number, maxRating: number) {
   const span = maxRating - minRating || 0.05
@@ -188,6 +175,39 @@ export function RatingChart({
     setIsHovering(false)
   }
 
+  function handleChartKeyDown(event: React.KeyboardEvent) {
+    if (chart.points.length === 0) return
+    const current = hoverState?.index ?? chart.points.length - 1
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      const next = Math.min(chart.points.length - 1, current + 1)
+      const point = chart.points[next]
+      hoverStateRef.current = { index: next, x: point.x }
+      setHoverState({ index: next, x: point.x })
+      setIsHovering(true)
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const next = Math.max(0, current - 1)
+      const point = chart.points[next]
+      hoverStateRef.current = { index: next, x: point.x }
+      setHoverState({ index: next, x: point.x })
+      setIsHovering(true)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      const point = chart.points[0]
+      hoverStateRef.current = { index: 0, x: point.x }
+      setHoverState({ index: 0, x: point.x })
+      setIsHovering(true)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      const last = chart.points.length - 1
+      const point = chart.points[last]
+      hoverStateRef.current = { index: last, x: point.x }
+      setHoverState({ index: last, x: point.x })
+      setIsHovering(true)
+    }
+  }
+
   if (weeks.length === 0) {
     return <div className="empty-chart">No sessions logged yet.</div>
   }
@@ -241,6 +261,14 @@ export function RatingChart({
         className="chart-wrap"
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
+        tabIndex={0}
+        role="slider"
+        aria-label="4DR rating over time. Use left and right arrows to review weekly ratings."
+        aria-valuemin={0}
+        aria-valuemax={chart.points.length - 1}
+        aria-valuenow={activeIndex}
+        aria-valuetext={`${isStart ? 'Starting rating' : formatWeekLabel(activeWeek?.label ?? '')}: ${formatRating(activePoint.rating)}`}
+        onKeyDown={handleChartKeyDown}
       >
         {isHovering ? (
           <div
@@ -261,7 +289,7 @@ export function RatingChart({
           viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
           className="rating-chart-svg"
           role="img"
-          aria-label="4DR rating over time. Move pointer over chart to inspect weekly ratings."
+          aria-label="4DR rating over time. Move across the chart to review weekly ratings."
         >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -349,6 +377,34 @@ export function RatingChart({
           />
         </svg>
 
+        <details className="chart-data-table">
+          <summary>View ratings as a table</summary>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Week</th>
+                  <th scope="col">Rating</th>
+                  <th scope="col">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Start</th>
+                  <td>{formatRating(startRating)}</td>
+                  <td>—</td>
+                </tr>
+                {weeks.map((week, index) => (
+                  <tr key={week.key}>
+                    <th scope="row">{formatWeekLabel(week.label)}</th>
+                    <td>{formatRating(roundRating(startRating + weeks.slice(0, index + 1).reduce((t, w) => t + w.change, 0)))}</td>
+                    <td>{`${week.change >= 0 ? '+' : ''}${week.change.toFixed(3)}`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
     </div>
   )

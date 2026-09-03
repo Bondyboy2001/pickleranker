@@ -5,6 +5,13 @@
 /.next/
 /out/
 
+# cloudflare
+/.wrangler/
+
+# browser-automation scratch output
+/.playwright-cli/
+/output/
+
 # production
 /build
 
@@ -32,7 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.vercel
 
-# Local Netlify folder
+# other deploy tooling (unused, but keep their artefacts out of git)
+.vercel
 .netlify

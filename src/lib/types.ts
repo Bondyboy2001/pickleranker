@@ -19,6 +19,9 @@ export type Match = {
   // the results view group games by round and court.
   round?: number
   court?: number
+  // Origin of the match: tournament brackets set 'tournament' so re-finishing
+  // can replace only tournament rows (manual games on the same day are kept).
+  source?: 'tournament' | 'manual'
 }
 
 export type WeeklySnapshot = {
@@ -114,6 +117,7 @@ export type DbPlayer = {
   id: string
   name: string
   skill_level: number
+  imported_rating?: number | null
 }
 
 export type DbMatch = {
@@ -129,6 +133,8 @@ export type DbMatch = {
   updated_at?: string
   round?: number
   court?: number
+  source?: string
+  imported?: boolean | null
 }
 
 export type MatchFormState = {

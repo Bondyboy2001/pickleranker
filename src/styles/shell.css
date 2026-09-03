@@ -1,0 +1,438 @@
+/* App shell, topbar, brand, notice banners, tabs, summary strip. Split from App.css; import order in app/layout.tsx sets the cascade. */
+.app-shell {
+  /* Breaks out of the old floating-card "window": full width, capped to a
+     readable max-width, no border / radius / shadow / grey gutter. */
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: transparent;
+  color: var(--text);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 88px;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.header-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--accent-strong);
+}
+
+.header-clock-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.header-clock-text strong {
+  color: var(--text-strong);
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.header-clock-text small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .header-clock {
+    display: none;
+  }
+}
+
+.brand-logo {
+  display: block;
+  width: auto;
+  height: clamp(54px, 8vw, 74px);
+  max-width: 300px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+:root[data-theme='dark'] .brand-logo {
+  filter: invert(1) brightness(1.2) contrast(0.92);
+}
+
+.notice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 28px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.notice-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.load-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 28px 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.load-banner.error {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recent-match-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.icon-button.danger {
+  color: var(--danger);
+}
+
+.recent-games-panel {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.recent-games-search {
+  padding: 0 var(--table-inset) 12px;
+}
+
+.recent-games-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 var(--table-inset) var(--table-inset);
+}
+
+.recent-games-weeks .empty-table {
+  padding: 18px 0;
+}
+
+.week-subwindow {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-alt);
+}
+
+.week-subwindow-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  background: var(--surface-alt);
+}
+
+.week-edit-button {
+  flex-shrink: 0;
+}
+
+.week-subwindow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 14px 18px;
+  border: none;
+  background: transparent;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+}
+
+.week-subwindow-header:hover {
+  background: var(--surface-elevated);
+}
+
+.week-title {
+  flex: 1;
+}
+
+.week-count {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.recent-games-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 16px;
+}
+
+.recent-player-highlight {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.recent-games-table tbody tr.editing {
+  background: var(--accent-soft);
+}
+
+.recent-games-table tbody tr.editing td {
+  border-bottom-color: var(--accent);
+}
+
+.recent-games-table tbody td strong {
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.score-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.topbar p,
+.panel-heading p,
+td span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.ghost-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-soft);
+}
+
+.ghost-link:hover {
+  border-color: var(--pine);
+  background: var(--surface-alt);
+  color: var(--text-strong);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.admin-link {
+  min-width: 104px;
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-alt);
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 34px 28px 16px;
+}
+
+.summary-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 116px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  background: var(--pine);
+  color: var(--pine-text);
+  font-weight: 800;
+}
+
+.summary-strip .summary-card > div > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-strip strong {
+  display: block;
+  color: var(--text-strong);
+  font-size: 25px;
+  line-height: 1.2;
+}
+
+.summary-strip b {
+  display: block;
+  margin-top: 4px;
+  color: var(--accent-strong);
+  font-size: 27px;
+  line-height: 1;
+}
+
+.summary-strip small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+
+/* Maintenance mode: calm centered card, no data. */
+.maintenance-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.maintenance-card {
+  max-width: 460px;
+  padding: 40px 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+
+.maintenance-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: var(--pine);
+  color: var(--pine-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.maintenance-card h1 {
+  margin: 0 0 12px;
+  color: var(--text-strong);
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.maintenance-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}

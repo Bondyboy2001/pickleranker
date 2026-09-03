@@ -173,14 +173,15 @@ describe('buildStandings', () => {
     expect(standings[0].id === 'p1' || standings[0].id === 'p2').toBe(true)
   })
 
-  it('does not move ratings for imported matches', () => {
+  it('moves ratings for imported matches — every game counts', () => {
     const importedData: AppData = {
       players: data.players,
       matches: [{ ...data.matches[0], id: 'm-imp', imported: true }],
     }
     const { standings } = buildStandings(importedData)
-    // Ratings stay at the default; only the win/loss record is counted.
-    standings.forEach((s) => expect(s.rating).toBe(3))
+    // Same result as a non-imported game: winners gain, losers lose.
     expect(standings.find((s) => s.id === 'p1')!.wins).toBe(1)
+    expect(standings.find((s) => s.id === 'p1')!.rating).toBeCloseTo(3.055, 3)
+    expect(standings.find((s) => s.id === 'p3')!.rating).toBeCloseTo(2.956, 3)
   })
 })

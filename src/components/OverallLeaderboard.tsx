@@ -10,6 +10,28 @@ import type { PlayerStanding, SortDirection, SortKey } from '../lib/types'
 
 const LEADERBOARD_COLUMN_COUNT = 8
 const COMPACT_LEADERBOARD_ROWS = 10
+const MOBILE_SORT_OPTIONS: Array<{
+  label: string
+  key: SortKey
+  direction: SortDirection
+}> = [
+  { label: 'Rank: highest first', key: 'rank', direction: 'asc' },
+  { label: 'Rank: lowest first', key: 'rank', direction: 'desc' },
+  { label: '4DR: highest first', key: 'rating', direction: 'desc' },
+  { label: '4DR: lowest first', key: 'rating', direction: 'asc' },
+  { label: 'Win rate: highest first', key: 'record', direction: 'desc' },
+  { label: 'Win rate: lowest first', key: 'record', direction: 'asc' },
+  { label: 'Wins: most first', key: 'wins', direction: 'desc' },
+  { label: 'Wins: fewest first', key: 'wins', direction: 'asc' },
+  { label: 'Losses: fewest first', key: 'losses', direction: 'asc' },
+  { label: 'Losses: most first', key: 'losses', direction: 'desc' },
+  { label: 'Games: most first', key: 'games', direction: 'desc' },
+  { label: 'Games: fewest first', key: 'games', direction: 'asc' },
+  { label: 'Point diff.: highest first', key: 'pointDiff', direction: 'desc' },
+  { label: 'Point diff.: lowest first', key: 'pointDiff', direction: 'asc' },
+  { label: 'Player A–Z', key: 'player', direction: 'asc' },
+  { label: 'Player Z–A', key: 'player', direction: 'desc' },
+]
 
 type OverallLeaderboardProps = {
   standings: PlayerStanding[]
@@ -26,6 +48,7 @@ type OverallLeaderboardProps = {
   onPinPlayer: (playerId: string | null) => void
   sort: { key: SortKey; direction: SortDirection }
   onToggleSort: (key: SortKey) => void
+  onSortChange: (sort: { key: SortKey; direction: SortDirection }) => void
   rankMovementByPlayerId: Map<string, number>
   playerCount: number
   matchCount: number
@@ -51,6 +74,7 @@ function OverallLeaderboardBase({
   onPinPlayer,
   sort,
   onToggleSort,
+  onSortChange,
   rankMovementByPlayerId,
   playerCount,
   matchCount,
@@ -67,14 +91,17 @@ function OverallLeaderboardBase({
   const pinnedPlayer = pinnedPlayerId ? (standingByPlayerId.get(pinnedPlayerId) ?? null) : null
   const pinnedRank = pinnedPlayer ? (rankByPlayerId.get(pinnedPlayer.id) ?? 0) : 0
   const compactRowsActive =
-    isNarrowViewport && !showAllRows && search.trim().length === 0 && filteredStandings.length > COMPACT_LEADERBOARD_ROWS
+    isNarrowViewport &&
+    !showAllRows &&
+    search.trim().length === 0 &&
+    filteredStandings.length > COMPACT_LEADERBOARD_ROWS
   const visibleStandings = useMemo(
     () => (compactRowsActive ? filteredStandings.slice(0, COMPACT_LEADERBOARD_ROWS) : filteredStandings),
     [compactRowsActive, filteredStandings],
   )
 
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 640px)')
+    const query = window.matchMedia('(max-width: 680px)')
     const updateViewport = () => setIsNarrowViewport(query.matches)
 
     updateViewport()
@@ -84,6 +111,7 @@ function OverallLeaderboardBase({
 
   return (
     <div className="overall-leaderboard">
+      <h1 className="visually-hidden">David Lloyd Cardiff pickleball leaderboard</h1>
       <section className="panel leaderboard-toolbar-panel" aria-label="Find a player">
         <div className="leaderboard-toolbar">
           <PlayerSearchAutocomplete
@@ -98,6 +126,18 @@ function OverallLeaderboardBase({
             ariaLabel="Find my ranking"
             className="leaderboard-search"
           />
+          {search.trim() ? (
+            <button
+              type="button"
+              className="ghost-button leaderboard-clear-button"
+              onClick={() => {
+                onSearchChange('')
+                onPinPlayer(null)
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
           <div className="minimum-games-filter" role="group" aria-label="Leaderboard eligibility">
             {(
               [
@@ -116,13 +156,41 @@ function OverallLeaderboardBase({
               </button>
             ))}
           </div>
-          {isNarrowViewport && filteredStandings.length > COMPACT_LEADERBOARD_ROWS ? (
+          {isNarrowViewport ? (
+            <label className="mobile-leaderboard-sort">
+              <span>Sort by</span>
+              <select
+                aria-label="Sort leaderboard"
+                value={`${sort.key}:${sort.direction}`}
+                onChange={(event) => {
+                  const [key, direction] = event.target.value.split(':') as [
+                    SortKey,
+                    SortDirection,
+                  ]
+                  onSortChange({ key, direction })
+                  setShowAllRows(false)
+                }}
+              >
+                {MOBILE_SORT_OPTIONS.map((option) => (
+                  <option
+                    key={`${option.key}:${option.direction}`}
+                    value={`${option.key}:${option.direction}`}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {isNarrowViewport &&
+          search.trim().length === 0 &&
+          filteredStandings.length > COMPACT_LEADERBOARD_ROWS ? (
             <button
               type="button"
               className="ghost-button leaderboard-range-button"
               onClick={() => setShowAllRows((current) => !current)}
             >
-              {showAllRows || search.trim().length > 0 ? 'Show top 10' : 'Show all players'}
+              {showAllRows ? 'Show first 10' : 'Show all players'}
             </button>
           ) : null}
         </div>
@@ -197,7 +265,7 @@ function OverallLeaderboardBase({
                 />
                 <SortableHeader label="Games" sortKey="games" activeSort={sort} onSort={onToggleSort} />
                 <SortableHeader
-                  label="Point"
+                  label="Point diff."
                   sortKey="pointDiff"
                   activeSort={sort}
                   onSort={onToggleSort}
@@ -234,13 +302,29 @@ function OverallLeaderboardBase({
                       )}
                     </td>
                     <td className="leaderboard-player-cell">
-                      <a href={buildPublicRoute('players', { playerId: player.id })}>
+                      <a
+                        href={buildPublicRoute('players', { playerId: player.id })}
+                        onClick={(event) => {
+                          if (
+                            event.button !== 0 ||
+                            event.metaKey ||
+                            event.ctrlKey ||
+                            event.shiftKey ||
+                            event.altKey
+                          ) {
+                            return
+                          }
+                          event.preventDefault()
+                          onPlayerSelect(player.id)
+                        }}
+                      >
                         {player.name}
                       </a>
                       {rankMovement !== 0 ? (
                         <span
                           className={`rank-movement ${rankMovement > 0 ? 'up' : 'down'}`}
                           aria-label={`${rankMovement > 0 ? 'Up' : 'Down'} ${Math.abs(rankMovement)} since last week`}
+                          title={`${rankMovement > 0 ? 'Up' : 'Down'} ${Math.abs(rankMovement)} place${Math.abs(rankMovement) === 1 ? '' : 's'} since last week's session`}
                         >
                           {rankMovement > 0 ? '▲' : '▼'} {Math.abs(rankMovement)}
                         </span>
@@ -251,7 +335,7 @@ function OverallLeaderboardBase({
                     <td data-label="Losses">{player.losses}</td>
                     <td data-label="Games">{player.games}</td>
                     <td
-                      data-label="Point"
+                      data-label="Point diff."
                       className={pointDiff > 0 ? 'positive' : pointDiff < 0 ? 'negative' : undefined}
                     >
                       {pointDiff >= 0 ? '+' : ''}
@@ -275,7 +359,7 @@ function OverallLeaderboardBase({
         </div>
         {compactRowsActive ? (
           <p className="leaderboard-compact-note">
-            Showing the top {COMPACT_LEADERBOARD_ROWS} of {filteredStandings.length} players.
+            Showing {COMPACT_LEADERBOARD_ROWS} of {filteredStandings.length} players.
           </p>
         ) : null}
       </section>

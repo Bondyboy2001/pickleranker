@@ -9,6 +9,7 @@ export function RatingExplainer() {
 
   return (
     <section className="panel rating-explainer-page">
+      <h1 className="visually-hidden">How the 4DR pickleball rating works</h1>
       <div className="rating-explainer-hero">
         <div>
           <span className="eyebrow">Rating guide</span>

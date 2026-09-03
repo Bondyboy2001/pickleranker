@@ -1,0 +1,122 @@
+/* Admin page, login panel, score-entry and player forms. Split from App.css; import order in app/layout.tsx sets the cascade. */
+.admin-page {
+  display: grid;
+  gap: 18px;
+  align-items: flex-start;
+  margin: 18px 28px 28px;
+}
+
+.view-tabs {
+  display: inline-flex;
+  gap: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--segment-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.view-tabs button,
+.view-tabs a {
+  min-width: 132px;
+  height: 52px;
+  padding: 0 22px;
+  border: 0;
+  border-right: 1px solid var(--segment-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--segment-idle-text);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.view-tabs button:last-child,
+.view-tabs a:last-child {
+  border-right: 0;
+}
+
+.view-tabs button:hover:not(.active),
+.view-tabs a:hover:not(.active) {
+  background: var(--surface-alt);
+  color: var(--text-strong);
+}
+
+.view-tabs button.active,
+.view-tabs a.active {
+  background: var(--pine);
+  color: var(--pine-text);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.header-tabs {
+  margin: 0;
+}
+
+.mobile-view-menu {
+  display: none;
+  position: relative;
+}
+
+.mobile-view-menu summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 900;
+  list-style: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.mobile-view-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobile-view-menu div {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 210px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.mobile-view-menu a {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.mobile-view-menu a:last-child {
+  border-bottom: 0;
+}
+
+.mobile-view-menu a[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+

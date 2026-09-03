@@ -12,12 +12,37 @@ import type {
   WeeklyStanding,
   WeeklySnapshot,
 } from './types'
-import { sortMatches } from './data'
+import { playerTeam, sortMatches } from './data'
+import { weekLabel } from './format'
 
 export const DEFAULT_RATING = 3
 
-function getInitialRating(player: Player) {
-  return player.importedRating ?? player.skillLevel ?? DEFAULT_RATING
+function playerNameMap(players: Player[]) {
+  return new Map(players.map((player) => [player.id, player.name]))
+}
+
+// Every game ever played counts toward the rating — including the early
+// history. Every player starts at the default 3.0 and the engine replays the
+// full match list in order from there.
+function getInitialRating() {
+  return DEFAULT_RATING
+}
+
+// Credit both teams with their rating change. Every replay in this module walks
+// matches in order and applies the deltas this same way — sharing one helper is
+// what keeps the replays identical, so ratings derived by different entry points
+// can't drift apart.
+function applyRatingDeltas(
+  ratings: Map<string, number>,
+  match: Match,
+  summary: Pick<MatchSummary, 'teamADelta' | 'teamBDelta'>,
+) {
+  match.teamA.forEach((playerId) => {
+    ratings.set(playerId, roundRating((ratings.get(playerId) ?? DEFAULT_RATING) + summary.teamADelta))
+  })
+  match.teamB.forEach((playerId) => {
+    ratings.set(playerId, roundRating((ratings.get(playerId) ?? DEFAULT_RATING) + summary.teamBDelta))
+  })
 }
 
 function rankPlayersByRating(players: Player[], ratings: Map<string, number>) {
@@ -25,26 +50,30 @@ function rankPlayersByRating(players: Player[], ratings: Map<string, number>) {
     [...players]
       .sort(
         (a, b) =>
-          (ratings.get(b.id) ?? getInitialRating(b)) - (ratings.get(a.id) ?? getInitialRating(a)) ||
+          (ratings.get(b.id) ?? getInitialRating()) - (ratings.get(a.id) ?? getInitialRating()) ||
           a.name.localeCompare(b.name),
       )
       .map((player, index) => [player.id, index + 1]),
   )
 }
 
-function parseSnapshotMovement(movement: string): number {
-  const parsed = Number.parseInt(movement, 10)
-  return Number.isFinite(parsed) ? parsed : 0
+// Players tied on rating are ordered by name everywhere, so the overall
+// leaderboard order and any historical ranking we replay break ties the same
+// way. Without that, tied players would swap places between the two orderings
+// and show phantom up/down arrows.
+function compareByRatingThenName(
+  a: { rating: number; name: string },
+  b: { rating: number; name: string },
+) {
+  return b.rating - a.rating || a.name.localeCompare(b.name)
 }
-
-export type PlayerRatingWeeksMode = 'standing' | 'fromDefault'
 
 export function buildStandings(data: AppData) {
   const ratings = new Map<string, number>()
   const standings = new Map<string, PlayerStanding>()
 
   data.players.forEach((player) => {
-    const initialRating = getInitialRating(player)
+    const initialRating = getInitialRating()
     ratings.set(player.id, initialRating)
     standings.set(player.id, {
       ...player,
@@ -64,22 +93,7 @@ export function buildStandings(data: AppData) {
     const summary = calculateMatch(match, ratings)
     summaries.push(summary)
 
-    if (!match.imported) {
-      const teamADelta = summary.teamADelta
-      const teamBDelta = summary.teamBDelta
-      match.teamA.forEach((playerId) => {
-        ratings.set(
-          playerId,
-          roundRating((ratings.get(playerId) ?? DEFAULT_RATING) + teamADelta),
-        )
-      })
-      match.teamB.forEach((playerId) => {
-        ratings.set(
-          playerId,
-          roundRating((ratings.get(playerId) ?? DEFAULT_RATING) + teamBDelta),
-        )
-      })
-    }
+    applyRatingDeltas(ratings, match, summary)
 
     match.teamA.forEach((playerId) => {
       const standing = standings.get(playerId)
@@ -106,75 +120,36 @@ export function buildStandings(data: AppData) {
   })
 
   return {
-    standings: [...standings.values()].sort((a, b) => b.rating - a.rating),
+    standings: [...standings.values()].sort(compareByRatingThenName),
     summaries: summaries.reverse(),
   }
 }
 
-export function buildPlayerRatingWeeks(
-  playerId: string,
-  data: AppData,
-  mode: PlayerRatingWeeksMode = 'fromDefault',
-): PlayerWeekPoint[] {
-  if (data.weeklySnapshots?.length) {
-    return buildPlayerSnapshotRatingWeeks(playerId, data)
-  }
-
+export function buildPlayerRatingWeeks(playerId: string, data: AppData): PlayerWeekPoint[] {
   const ratings = new Map<string, number>()
   data.players.forEach((player) => {
-    ratings.set(
-      player.id,
-      mode === 'fromDefault' ? DEFAULT_RATING : getInitialRating(player),
-    )
+    ratings.set(player.id, getInitialRating())
   })
 
   const weeks = new Map<string, PlayerWeekPoint>()
 
   sortMatches(data.matches).forEach((match) => {
-    const affectsRating = mode === 'fromDefault' || !match.imported
     const summary = calculateMatch(match, ratings)
-    const playerTeam = match.teamA.includes(playerId)
-      ? 'A'
-      : match.teamB.includes(playerId)
-        ? 'B'
-        : null
+    const team = playerTeam(match, playerId)
 
-    if (playerTeam) {
+    if (team) {
       const weekKey = match.playedOn
-      const existing = weeks.get(weekKey) ?? {
-        key: weekKey,
-        label: match.week.replace(/^Results\s+/, ''),
-        playedOn: match.playedOn,
-        change: 0,
-        cumulative: 0,
-        games: 0,
-        wins: 0,
-        losses: 0,
-        pointsFor: 0,
-        pointsAgainst: 0,
-      }
-      const won = summary.winner === playerTeam
-      const change = playerTeam === 'A' ? summary.teamADelta : summary.teamBDelta
+      const existing =
+        weeks.get(weekKey) ??
+        emptyPlayerWeekPoint(weekKey, weekLabel(match.week), match.playedOn)
+      const change = team === 'A' ? summary.teamADelta : summary.teamBDelta
 
-      if (affectsRating) {
-        existing.change = roundRating(existing.change + change)
-      }
-      existing.games += 1
-      existing.wins += won ? 1 : 0
-      existing.losses += won ? 0 : 1
-      existing.pointsFor += playerTeam === 'A' ? match.scoreA : match.scoreB
-      existing.pointsAgainst += playerTeam === 'A' ? match.scoreB : match.scoreA
+      existing.change = roundRating(existing.change + change)
+      addGameToWeek(existing, match, team, summary.winner === team)
       weeks.set(weekKey, existing)
     }
 
-    if (affectsRating) {
-      match.teamA.forEach((id) => {
-        ratings.set(id, roundRating((ratings.get(id) ?? DEFAULT_RATING) + summary.teamADelta))
-      })
-      match.teamB.forEach((id) => {
-        ratings.set(id, roundRating((ratings.get(id) ?? DEFAULT_RATING) + summary.teamBDelta))
-      })
-    }
+    applyRatingDeltas(ratings, match, summary)
   })
 
   let cumulative = 0
@@ -201,121 +176,19 @@ function emptyPlayerWeekPoint(key: string, label: string, playedOn: string): Pla
   }
 }
 
-function buildPlayerMatchStats(playerId: string, matches: Match[]) {
-  const stats = new Map<string, PlayerWeekPoint>()
-
-  sortMatches(matches).forEach((match) => {
-    const team = match.teamA.includes(playerId)
-      ? 'A'
-      : match.teamB.includes(playerId)
-        ? 'B'
-        : null
-    if (!team) return
-
-    const key = match.playedOn
-    const week =
-      stats.get(key) ??
-      emptyPlayerWeekPoint(key, match.week.replace(/^Results\s+/, ''), match.playedOn)
-    const won = team === (match.scoreA > match.scoreB ? 'A' : 'B')
-
-    week.games += 1
-    week.wins += won ? 1 : 0
-    week.losses += won ? 0 : 1
-    week.pointsFor += team === 'A' ? match.scoreA : match.scoreB
-    week.pointsAgainst += team === 'A' ? match.scoreB : match.scoreA
-    stats.set(key, week)
-  })
-
-  return stats
-}
-
-function buildPlayerSnapshotRatingWeeks(playerId: string, data: AppData) {
-  const matchStats = buildPlayerMatchStats(playerId, data.matches)
-  const snapshots = [...(data.weeklySnapshots ?? [])].sort((a, b) =>
-    a.playedOn.localeCompare(b.playedOn),
-  )
-  const weeks: PlayerWeekPoint[] = []
-  let previousRating = DEFAULT_RATING
-
-  snapshots.forEach((snapshot) => {
-    const snapshotPlayer = snapshot.players.find((player) => player.playerId === playerId)
-    if (!snapshotPlayer) return
-
-    const stats =
-      matchStats.get(snapshot.playedOn) ??
-      emptyPlayerWeekPoint(snapshot.key, snapshot.label, snapshot.playedOn)
-    const rating = snapshotPlayer.rating
-
-    weeks.push({
-      ...stats,
-      key: snapshot.key,
-      label: snapshot.label,
-      playedOn: snapshot.playedOn,
-      change: roundRating(rating - previousRating),
-      cumulative: roundRating(rating - DEFAULT_RATING),
-    })
-    previousRating = rating
-  })
-
-  const latestSnapshot = snapshots.at(-1)
-  if (!latestSnapshot) return weeks
-
-  const ratings = new Map<string, number>()
-  data.players.forEach((player) => {
-    ratings.set(player.id, getInitialRating(player))
-  })
-  latestSnapshot.players.forEach((player) => {
-    ratings.set(player.playerId, player.rating)
-  })
-
-  const postSnapshotWeeks = new Map<string, PlayerWeekPoint>()
-  sortMatches(data.matches)
-    .filter((match) => !match.imported && match.playedOn > latestSnapshot.playedOn)
-    .forEach((match) => {
-      const summary = calculateMatch(match, ratings)
-      const playerTeam = match.teamA.includes(playerId)
-        ? 'A'
-        : match.teamB.includes(playerId)
-          ? 'B'
-          : null
-
-      if (playerTeam) {
-        const week =
-          postSnapshotWeeks.get(match.playedOn) ??
-          emptyPlayerWeekPoint(
-            match.playedOn,
-            match.week.replace(/^Results\s+/, ''),
-            match.playedOn,
-          )
-        const won = summary.winner === playerTeam
-        const change = playerTeam === 'A' ? summary.teamADelta : summary.teamBDelta
-
-        week.change = roundRating(week.change + change)
-        week.games += 1
-        week.wins += won ? 1 : 0
-        week.losses += won ? 0 : 1
-        week.pointsFor += playerTeam === 'A' ? match.scoreA : match.scoreB
-        week.pointsAgainst += playerTeam === 'A' ? match.scoreB : match.scoreA
-        postSnapshotWeeks.set(match.playedOn, week)
-      }
-
-      match.teamA.forEach((id) => {
-        ratings.set(id, roundRating((ratings.get(id) ?? DEFAULT_RATING) + summary.teamADelta))
-      })
-      match.teamB.forEach((id) => {
-        ratings.set(id, roundRating((ratings.get(id) ?? DEFAULT_RATING) + summary.teamBDelta))
-      })
-    })
-
-  let cumulative = weeks.at(-1)?.cumulative ?? 0
-  ;[...postSnapshotWeeks.values()]
-    .sort((a, b) => a.playedOn.localeCompare(b.playedOn))
-    .forEach((week) => {
-      cumulative = roundRating(cumulative + week.change)
-      weeks.push({ ...week, cumulative })
-    })
-
-  return weeks
+// Fold one of the player's games into their running week totals. The rating
+// change is the caller's business — only the games/points tallies live here.
+function addGameToWeek(
+  week: PlayerWeekPoint,
+  match: Match,
+  team: 'A' | 'B',
+  won: boolean,
+) {
+  week.games += 1
+  week.wins += won ? 1 : 0
+  week.losses += won ? 0 : 1
+  week.pointsFor += team === 'A' ? match.scoreA : match.scoreB
+  week.pointsAgainst += team === 'A' ? match.scoreB : match.scoreA
 }
 
 export function buildWeekOptions(summaries: MatchSummary[], snapshots: WeeklySnapshot[] = []) {
@@ -330,11 +203,7 @@ export function buildWeekOptions(summaries: MatchSummary[], snapshots: WeeklySna
   summaries.forEach((match) => {
     const key = match.playedOn
     if (!weeks.has(key)) {
-      weeks.set(key, {
-        key,
-        label: match.week.replace(/^Results\s+/, ''),
-        playedOn: match.playedOn,
-      })
+      weeks.set(key, { key, label: weekLabel(match.week), playedOn: match.playedOn })
     }
   })
   return [...weeks.values()].sort((a, b) => b.playedOn.localeCompare(a.playedOn))
@@ -345,46 +214,20 @@ export function buildWeeklyStandings(
   summaries: MatchSummary[],
   players: Player[],
   matches: Match[],
-  snapshots: WeeklySnapshot[] = [],
 ) {
-  const playerNames = new Map(players.map((player) => [player.id, player.name]))
+  const playerNames = playerNameMap(players)
   const standings = new Map<string, WeeklyStanding>()
-  const snapshot = snapshots.find((snapshot) => snapshot.key === selectedWeek)
-  const snapshotRanks = snapshot?.players.reduce((ranks, player) => {
-    ranks.set(player.playerId, player.rank)
-    return ranks
-  }, new Map<string, number>())
-  const snapshotMovements = snapshot?.players.reduce((movements, player) => {
-    movements.set(player.playerId, parseSnapshotMovement(player.movement))
-    return movements
-  }, new Map<string, number>())
-  const snapshotChanges = buildSnapshotRatingChanges(snapshots).get(selectedWeek)
-  const snapshotRatings = snapshot?.players.reduce((ratings, player) => {
-    ratings.set(player.playerId, player.rating)
-    return ratings
-  }, new Map<string, number>())
-  const weekStartRanks = snapshotMovements
-    ? null
-    : rankPlayersByRating(players, buildWeekStartRatings(selectedWeek, players, matches, snapshots))
-  // Always derive replay-based week-end ratings/ranks so a player who appears in
-  // the week (e.g. added to a snapshotted week via Edit Tournament) but is missing
-  // from the stored snapshot still gets a real rating and rank instead of falling
-  // through to 0 (which would render "0" and sort above the genuine #1).
-  const replayRatings = buildWeekEndRatings(selectedWeek, players, matches, snapshots)
+  // One replay serves both ends of the week: the week-end ratings carry on from a
+  // copy of the week-start map instead of walking the whole history again. Every
+  // game counts, from the earliest history on.
+  const sortedMatches = sortMatches(matches)
+  const weekStartRatings = buildWeekStartRatings(selectedWeek, players, sortedMatches)
+  const replayRatings = applyWeekMatches(selectedWeek, sortedMatches, new Map(weekStartRatings))
   const replayRanks = rankPlayersByRating(players, replayRatings)
-  const weekEndRanks = snapshotRanks
-    ? new Map(
-        players.map((player) => [
-          player.id,
-          snapshotRanks.get(player.id) ?? replayRanks.get(player.id) ?? 0,
-        ]),
-      )
-    : replayRanks
+  const weekStartRanks = rankPlayersByRating(players, weekStartRatings)
+  const weekEndRanks = replayRanks
   const getRankMovement = (playerId: string, rank: number) => {
-    const snapshotMovement = snapshotMovements?.get(playerId)
-    if (snapshotMovement !== undefined) return snapshotMovement
-
-    const previousRank = weekStartRanks?.get(playerId)
+    const previousRank = weekStartRanks.get(playerId)
     return previousRank && rank ? previousRank - rank : 0
   }
 
@@ -395,10 +238,7 @@ export function buildWeeklyStandings(
       name: player.name,
       rank,
       rankMovement: getRankMovement(player.id, rank),
-      rating:
-        snapshotRatings?.get(player.id) ??
-        replayRatings?.get(player.id) ??
-        getInitialRating(player),
+      rating: replayRatings.get(player.id) ?? getInitialRating(),
       change: 0,
       wins: 0,
       losses: 0,
@@ -424,7 +264,7 @@ export function buildWeeklyStandings(
         name: playerNames.get(playerId) ?? 'Unknown',
         rank: weekEndRanks.get(playerId) ?? 0,
         rankMovement: getRankMovement(playerId, weekEndRanks.get(playerId) ?? 0),
-        rating: snapshotRatings?.get(playerId) ?? replayRatings?.get(playerId) ?? DEFAULT_RATING,
+        rating: replayRatings.get(playerId) ?? DEFAULT_RATING,
         change: 0,
         wins: 0,
         losses: 0,
@@ -449,15 +289,6 @@ export function buildWeeklyStandings(
     )
   })
 
-  if (snapshotChanges) {
-    standings.forEach((standing, playerId) => {
-      const snapshotChange = snapshotChanges.get(playerId)
-      if (snapshotChange !== undefined && snapshotChange !== null) {
-        standing.change = snapshotChange
-      }
-    })
-  }
-
   return [...standings.values()].sort(
     (a, b) =>
       b.change - a.change ||
@@ -468,106 +299,94 @@ export function buildWeeklyStandings(
   )
 }
 
-function buildSnapshotRatingChanges(snapshots: WeeklySnapshot[]) {
-  const changesByWeek = new Map<string, Map<string, number | null>>()
-  const previousRatingByPlayer = new Map<string, number>()
-
-  const chronologicalSnapshots = [...snapshots].sort((a, b) =>
-    a.playedOn.localeCompare(b.playedOn),
-  )
-
-  chronologicalSnapshots.forEach((snapshot) => {
-    const weekChanges = new Map<string, number | null>()
-
-    snapshot.players.forEach((player) => {
-      const previousRating = previousRatingByPlayer.get(player.playerId)
-      weekChanges.set(
-        player.playerId,
-        previousRating === undefined ? null : roundRating(player.rating - previousRating),
-      )
-    })
-    snapshot.players.forEach((player) => {
-      previousRatingByPlayer.set(player.playerId, player.rating)
-    })
-    changesByWeek.set(snapshot.key, weekChanges)
-  })
-
-  return changesByWeek
-}
-
+// Ratings as they stood before `selectedWeek` was played. `sortedMatches` must
+// already be in play order — callers sort once and share the result across the
+// several replays a weekly view needs.
 function buildWeekStartRatings(
   selectedWeek: string,
   players: Player[],
-  matches: Match[],
-  snapshots: WeeklySnapshot[] = [],
+  sortedMatches: Match[],
 ) {
-  const ratings = new Map(players.map((player) => [player.id, getInitialRating(player)]))
-  const previousSnapshotDates = snapshots
-    .filter((snapshot) => snapshot.playedOn < selectedWeek)
-    .sort((a, b) => a.playedOn.localeCompare(b.playedOn))
+  const ratings = new Map(players.map((player) => [player.id, getInitialRating()]))
 
-  previousSnapshotDates.forEach((snapshot) => {
-    snapshot.players.forEach((player) => {
-      ratings.set(player.playerId, player.rating)
-    })
-  })
+  sortedMatches.forEach((match) => {
+    if (match.playedOn >= selectedWeek) return
 
-  const latestSnapshotDate = previousSnapshotDates.at(-1)?.playedOn
-
-  sortMatches(matches).forEach((match) => {
-    if (
-      match.imported ||
-      match.playedOn >= selectedWeek ||
-      (latestSnapshotDate && match.playedOn <= latestSnapshotDate)
-    ) {
-      return
-    }
-
-    const summary = calculateMatch(match, ratings)
-    match.teamA.forEach((matchPlayerId) => {
-      ratings.set(
-        matchPlayerId,
-        roundRating((ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamADelta),
-      )
-    })
-    match.teamB.forEach((matchPlayerId) => {
-      ratings.set(
-        matchPlayerId,
-        roundRating((ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamBDelta),
-      )
-    })
+    applyRatingDeltas(ratings, match, calculateMatch(match, ratings))
   })
 
   return ratings
 }
 
-function buildWeekEndRatings(
+// Play `selectedWeek`'s matches into `ratings` (mutated and returned), turning a
+// week-start map into a week-end one.
+function applyWeekMatches(
   selectedWeek: string,
-  players: Player[],
-  matches: Match[],
-  snapshots: WeeklySnapshot[] = [],
+  sortedMatches: Match[],
+  ratings: Map<string, number>,
 ) {
-  const ratings = buildWeekStartRatings(selectedWeek, players, matches, snapshots)
-
-  sortMatches(matches).forEach((match) => {
-    if (match.imported || match.playedOn !== selectedWeek) return
-
-    const summary = calculateMatch(match, ratings)
-    match.teamA.forEach((matchPlayerId) => {
-      ratings.set(
-        matchPlayerId,
-        roundRating((ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamADelta),
-      )
-    })
-    match.teamB.forEach((matchPlayerId) => {
-      ratings.set(
-        matchPlayerId,
-        roundRating((ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamBDelta),
-      )
-    })
+  sortedMatches.forEach((match) => {
+    if (match.playedOn !== selectedWeek) return
+    applyRatingDeltas(ratings, match, calculateMatch(match, ratings))
   })
 
   return ratings
+}
+
+// Every date the league actually played, oldest first.
+function listPlayedWeeks(data: AppData) {
+  const weeks = new Set<string>()
+  data.matches.forEach((match) => weeks.add(match.playedOn))
+  return [...weeks].sort()
+}
+
+// Ratings as they stood at the end of `week`, replayed exactly the way
+// buildStandings replays them — same starting rating, every game counting.
+// Deriving both ends of the comparison identically is what makes the
+// difference a real rank change rather than an artefact of two methods.
+function buildRatingsAsOfWeek(week: string, data: AppData) {
+  const ratings = new Map(data.players.map((player) => [player.id, getInitialRating()]))
+
+  sortMatches(data.matches).forEach((match) => {
+    if (match.playedOn > week) return
+    applyRatingDeltas(ratings, match, calculateMatch(match, ratings))
+  })
+
+  return ratings
+}
+
+// How far each player has moved on the overall leaderboard since the end of the
+// previous playing week. `standings` supplies today's order so the movement is
+// measured against the ranks the table actually renders.
+//
+// This deliberately replays last week's ranking from the full match list, so
+// the arrows always agree with the table.
+export function buildOverallRankMovement(data: AppData, standings: PlayerStanding[]) {
+  const movement = new Map<string, number>()
+  const weeks = listPlayedWeeks(data)
+  const previousWeek = weeks.at(-2)
+  if (!previousWeek) return movement
+
+  const previousRanks = rankPlayersByRating(data.players, buildRatingsAsOfWeek(previousWeek, data))
+
+  // Someone who first appeared this week has no rank to move from — an arrow
+  // against their provisional starting rating would be meaningless.
+  const rankedLastWeek = new Set<string>()
+  data.matches.forEach((match) => {
+    if (match.playedOn > previousWeek) return
+    ;[...match.teamA, ...match.teamB].forEach((playerId) => rankedLastWeek.add(playerId))
+  })
+
+  standings.forEach((player, index) => {
+    const previousRank = previousRanks.get(player.id)
+    if (!previousRank || !rankedLastWeek.has(player.id)) {
+      movement.set(player.id, 0)
+      return
+    }
+    movement.set(player.id, previousRank - (index + 1))
+  })
+
+  return movement
 }
 
 export function buildWeeklyPlayerGames(
@@ -575,14 +394,14 @@ export function buildWeeklyPlayerGames(
   selectedWeek: string,
   matches: Match[],
   players: Player[],
-  snapshots: WeeklySnapshot[] = [],
 ) {
-  const playerNames = new Map(players.map((player) => [player.id, player.name]))
-  const ratings = buildWeekStartRatings(selectedWeek, players, matches, snapshots)
+  const playerNames = playerNameMap(players)
+  const sortedMatches = sortMatches(matches)
+  const ratings = buildWeekStartRatings(selectedWeek, players, sortedMatches)
   const games: WeeklyPlayerGame[] = []
 
   let selectedWeekGameIndex = 0
-  sortMatches(matches).forEach((match) => {
+  sortedMatches.forEach((match) => {
     if (match.playedOn !== selectedWeek) return
     selectedWeekGameIndex += 1
     const summary = calculateMatch(match, ratings)
@@ -604,8 +423,8 @@ export function buildWeeklyPlayerGames(
       makePlayer(matchPlayerId, summary.teamBDelta),
     )
 
-    if (match.teamA.includes(playerId) || match.teamB.includes(playerId)) {
-      const selectedTeam = match.teamA.includes(playerId) ? 'A' : 'B'
+    const selectedTeam = playerTeam(match, playerId)
+    if (selectedTeam) {
       const ratingChange = selectedTeam === 'A' ? summary.teamADelta : summary.teamBDelta
 
       games.push({
@@ -631,21 +450,43 @@ export function buildWeeklyPlayerGames(
       })
     }
 
-    match.teamA.forEach((matchPlayerId) => {
-      ratings.set(
-        matchPlayerId,
-        roundRating((ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamADelta),
-      )
-    })
-    match.teamB.forEach((matchPlayerId) => {
-      ratings.set(
-        matchPlayerId,
-        roundRating((ratings.get(matchPlayerId) ?? DEFAULT_RATING) + summary.teamBDelta),
-      )
-    })
+    applyRatingDeltas(ratings, match, summary)
   })
 
   return games
+}
+
+// Sorting a table always works the same way: compare on the chosen column, flip
+// for direction, and fall back to the incoming order so equal rows never shuffle
+// between renders. Only the per-column comparison differs, so that's all each
+// table supplies.
+function sortTable<Row, Key extends string>(
+  rows: Row[],
+  key: Key,
+  direction: SortDirection,
+  comparators: Record<Key, (a: Row, b: Row, aIndex: number, bIndex: number) => number>,
+) {
+  const directionMultiplier = direction === 'asc' ? 1 : -1
+  const compare = comparators[key]
+
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (a, b) =>
+        compare(a.row, b.row, a.index, b.index) * directionMultiplier || a.index - b.index,
+    )
+    .map((entry) => entry.row)
+}
+
+const WEEKLY_COMPARATORS: Record<
+  WeeklySortKey,
+  (a: WeeklyStanding, b: WeeklyStanding) => number
+> = {
+  rank: (a, b) => a.rank - b.rank,
+  player: (a, b) => a.name.localeCompare(b.name),
+  rating: (a, b) => a.rating - b.rating,
+  weeklyChange: (a, b) => a.change - b.change,
+  rankMovement: (a, b) => a.rankMovement - b.rankMovement,
 }
 
 export function sortWeeklyStandings(
@@ -653,20 +494,30 @@ export function sortWeeklyStandings(
   key: WeeklySortKey,
   direction: SortDirection,
 ) {
-  const directionMultiplier = direction === 'asc' ? 1 : -1
-  const ranked = standings.map((player, rankIndex) => ({ player, rankIndex }))
+  return sortTable(standings, key, direction, WEEKLY_COMPARATORS)
+}
 
-  return ranked
-    .sort((a, b) => {
-      let result = 0
-      if (key === 'rank') result = a.player.rank - b.player.rank
-      if (key === 'player') result = a.player.name.localeCompare(b.player.name)
-      if (key === 'rating') result = a.player.rating - b.player.rating
-      if (key === 'weeklyChange') result = a.player.change - b.player.change
-      if (key === 'rankMovement') result = a.player.rankMovement - b.player.rankMovement
-      return result * directionMultiplier || a.rankIndex - b.rankIndex
-    })
-    .map((item) => item.player)
+function winRate(player: PlayerStanding) {
+  return player.games ? player.wins / player.games : 0
+}
+
+function pointDiff(player: PlayerStanding) {
+  return player.pointsFor - player.pointsAgainst
+}
+
+const STANDING_COMPARATORS: Record<
+  SortKey,
+  (a: PlayerStanding, b: PlayerStanding, aIndex: number, bIndex: number) => number
+> = {
+  // The table arrives in rank order, so the row's position *is* its rank.
+  rank: (_a, _b, aIndex, bIndex) => aIndex - bIndex,
+  player: (a, b) => a.name.localeCompare(b.name),
+  rating: (a, b) => a.rating - b.rating,
+  record: (a, b) => winRate(a) - winRate(b) || a.wins - b.wins,
+  wins: (a, b) => a.wins - b.wins,
+  losses: (a, b) => a.losses - b.losses,
+  games: (a, b) => a.games - b.games,
+  pointDiff: (a, b) => pointDiff(a) - pointDiff(b),
 }
 
 export function sortStandings(
@@ -674,25 +525,5 @@ export function sortStandings(
   key: SortKey,
   direction: SortDirection,
 ) {
-  const directionMultiplier = direction === 'asc' ? 1 : -1
-  const ranked = standings.map((player, rankIndex) => ({ player, rankIndex }))
-
-  return ranked
-    .sort((a, b) => {
-      let result = 0
-      if (key === 'rank') result = a.rankIndex - b.rankIndex
-      if (key === 'player') result = a.player.name.localeCompare(b.player.name)
-      if (key === 'rating') result = a.player.rating - b.player.rating
-      if (key === 'record') {
-        const aRate = a.player.games ? a.player.wins / a.player.games : 0
-        const bRate = b.player.games ? b.player.wins / b.player.games : 0
-        result = aRate - bRate || a.player.wins - b.player.wins
-      }
-      if (key === 'wins') result = a.player.wins - b.player.wins
-      if (key === 'losses') result = a.player.losses - b.player.losses
-      if (key === 'games') result = a.player.games - b.player.games
-      if (key === 'pointDiff') result = (a.player.pointsFor - a.player.pointsAgainst) - (b.player.pointsFor - b.player.pointsAgainst)
-      return result * directionMultiplier || a.rankIndex - b.rankIndex
-    })
-    .map((item) => item.player)
+  return sortTable(standings, key, direction, STANDING_COMPARATORS)
 }

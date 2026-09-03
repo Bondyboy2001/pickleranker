@@ -17,12 +17,14 @@ export function PlayerSlotSelect({
   onChange,
   placeholder = '',
   className = '',
+  ariaLabel,
 }: {
   value: string
   options: ThemedSelectOption[]
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  ariaLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -44,11 +46,15 @@ export function PlayerSlotSelect({
       const el = wrapRef.current
       if (!el) return
       const r = el.getBoundingClientRect()
-      setRect({ top: r.bottom + 6, left: r.left, width: r.width })
+      setRect({ top: r.bottom + 6 + window.scrollY, left: r.left + window.scrollX, width: r.width })
     }
     position()
     window.addEventListener('resize', position)
-    return () => window.removeEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    return () => {
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+    }
   }, [open])
 
   function openMenu() {
@@ -90,6 +96,9 @@ export function PlayerSlotSelect({
         role="combobox"
         aria-expanded={open}
         aria-controls={listboxId}
+        aria-label={ariaLabel ?? placeholder ?? 'Select player'}
+        aria-autocomplete="list"
+        aria-activedescendant={open ? `${listboxId}-${active}` : undefined}
         autoComplete="off"
         placeholder={placeholder}
         value={open ? query : currentLabel}
@@ -116,6 +125,7 @@ export function PlayerSlotSelect({
                 filtered.map((option, index) => (
                   <li
                     key={option.value}
+                    id={`${listboxId}-${index}`}
                     role="option"
                     aria-selected={option.value === value}
                     className={`themed-select-option${index === active ? ' active' : ''}${

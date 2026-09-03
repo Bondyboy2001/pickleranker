@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -17,13 +17,14 @@ import { AdminField, FieldInput } from './AdminField'
 import { DatePicker } from './DatePicker'
 import { PlayerAutocomplete, PlayerSearchAutocomplete } from './PlayerAutocomplete'
 import { ScoreInput } from './ScoreInput'
-import { TournamentPanel } from './TournamentPanel'
+const TournamentPanel = lazy(() =>
+  import('./TournamentPanel').then((m) => ({ default: m.TournamentPanel })),
+)
 import { reconstructTournament, type TournamentState } from '../lib/tournament'
 import { loadFinishedTournament } from '../lib/tournamentStorage'
 import type { AppData, Match, MatchFormState, PlayerStanding } from '../lib/types'
 import type { Session } from '@supabase/supabase-js'
-
-const ADMIN_USERNAME = 'ben'
+import { ConfirmDialog } from './ConfirmDialog'
 
 export function AdminPage({
   authForm,
@@ -75,7 +76,7 @@ export function AdminPage({
   saveTournamentRound: (matches: Match[]) => Promise<boolean>
   setAuthForm: (value: { username: string; password: string }) => void
   setMatchError: (value: string) => void
-  setMatchForm: (value: MatchFormState) => void
+  setMatchForm: Dispatch<SetStateAction<MatchFormState>>
   setPlayerForm: (value: { name: string; skillLevel: string }) => void
   signIn: (event: FormEvent<HTMLFormElement>) => void
   signOut: () => void
@@ -88,7 +89,11 @@ export function AdminPage({
   requestDeleteMatch: (matchId: string) => void
   lastSavedMatchForm: MatchFormState | null
 }) {
-  const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>('games')
+  const [adminTab, setAdminTab] = useState<'games' | 'tournament' | 'recent'>(() => {
+    if (typeof window === 'undefined') return 'games'
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    return tab === 'tournament' || tab === 'recent' ? tab : 'games'
+  })
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
   // Free-text player filter for the Recent tournaments tab.
   const [recentSearch, setRecentSearch] = useState('')
@@ -103,26 +108,36 @@ export function AdminPage({
   function goToTab(tab: 'games' | 'tournament' | 'recent') {
     openTournamentRequest.current += 1
     setAdminTab(tab)
+    const url = new URL(window.location.href)
+    if (tab === 'games') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', tab)
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`)
   }
 
   // Reopen a finished tournament on the full tournament screen. Uses the
   // archived bracket if one was saved on finish, otherwise rebuilds it from the
   // saved game rows (older tournaments). Re-finishing replaces that date's
   // results on the leaderboard.
+  const [pendingTournament, setPendingTournament] = useState<Match[] | null>(null)
+  const [tournamentNotice, setTournamentNotice] = useState('')
   async function openFullTournament(matches: Match[]) {
     const tagged = matches.filter((match) => typeof match.round === 'number')
     if (tagged.length === 0) {
-      window.alert(
+      setTournamentNotice(
         "This tournament was saved without round info, so it can't be opened as a full bracket. Edit individual games instead.",
       )
       return
     }
+    setPendingTournament(matches)
+  }
+
+  async function confirmOpenTournament() {
+    const matches = pendingTournament
+    setPendingTournament(null)
+    if (!matches) return
+    const tagged = matches.filter((match) => typeof match.round === 'number')
     const playedOn = tagged[0].playedOn
     const sameDay = tagged.filter((match) => match.playedOn === playedOn)
-    const confirmed = window.confirm(
-      'Open this tournament in the full editor? Any tournament you have started but not finished will be replaced.',
-    )
-    if (!confirmed) return
     const token = (openTournamentRequest.current += 1)
     const archived = await loadFinishedTournament(playedOn)
     // The user switched tabs (or opened something else) while the load was in
@@ -142,10 +157,13 @@ export function AdminPage({
     goToTab('games')
   }
 
-  const updateMatchForm = (next: Partial<MatchFormState>) => {
-    setMatchForm({ ...matchForm, ...next })
-    setMatchError('')
-  }
+  const updateMatchForm = useCallback(
+    (next: Partial<MatchFormState>) => {
+      setMatchForm((current) => ({ ...current, ...next }))
+      setMatchError('')
+    },
+    [setMatchError, setMatchForm],
+  )
 
   function duplicateLastGame() {
     if (!lastSavedMatchForm) return
@@ -166,6 +184,40 @@ export function AdminPage({
         : 'Signed in, but this account is not listed as an admin.'
       : ''
 
+  // Grouping + filtering ran inline on every render (including each keystroke in
+  // the score-entry form). Memoize it so typing only recomputes the recent list.
+  const recentQuery = recentSearch.trim().toLowerCase()
+  const recentWeeks = useMemo(() => {
+    const matchHasPlayer = (match: Match) =>
+      !recentQuery ||
+      [match.teamA[0], match.teamA[1], match.teamB[0], match.teamB[1]].some((id) =>
+        (playerNameById.get(id) ?? '').toLowerCase().includes(recentQuery),
+      )
+    const weeks = new Map<string, Match[]>()
+    recentMatches.forEach((match) => {
+      const list = weeks.get(match.week) ?? []
+      list.push(match)
+      weeks.set(match.week, list)
+    })
+    // Keep the full match list per week for "Edit Tournament" (which reopens the
+    // whole bracket), but only show the games that match the player filter.
+    return [...weeks.entries()]
+      .map(([week, matches]) => ({ week, matches, games: matches.filter(matchHasPlayer) }))
+      .filter((entry) => entry.games.length > 0)
+  }, [recentMatches, playerNameById, recentQuery])
+
+  const renderRecentPlayerName = useCallback(
+    (id: string) => {
+      const name = playerNameById.get(id) ?? '?'
+      return recentQuery && name.toLowerCase().includes(recentQuery) ? (
+        <mark className="recent-player-highlight">{name}</mark>
+      ) : (
+        name
+      )
+    },
+    [playerNameById, recentQuery],
+  )
+
   return (
     <section className="admin-page">
       <section className="panel login-panel">
@@ -178,7 +230,7 @@ export function AdminPage({
         {isSupabaseConfigured ? (
           session ? (
             <div className="admin-status">
-              <span>{isAdmin ? ADMIN_USERNAME : session.user.email}</span>
+              <span>{session.user.email}</span>
               <button type="button" className="ghost-button" onClick={signOut}>
                 <LogOut size={16} />
                 Sign out
@@ -186,10 +238,10 @@ export function AdminPage({
             </div>
           ) : (
             <form className="admin-form" onSubmit={signIn}>
-              <AdminField label="Username">
+              <AdminField label="Email">
                 <FieldInput
                   type="text"
-                  placeholder="Username"
+                  placeholder="Admin email"
                   autoComplete="username"
                   value={authForm.username}
                   onChange={(event) => setAuthForm({ ...authForm, username: event.target.value })}
@@ -252,6 +304,8 @@ export function AdminPage({
         <div className="view-tabs admin-tabs" role="tablist" aria-label="Admin views">
           <button
             type="button"
+            role="tab"
+            aria-selected={adminTab === 'games'}
             className={adminTab === 'games' ? 'active' : ''}
             onClick={() => goToTab('games')}
           >
@@ -259,6 +313,8 @@ export function AdminPage({
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={adminTab === 'tournament'}
             className={adminTab === 'tournament' ? 'active' : ''}
             onClick={() => {
               setEditTournament(null)
@@ -269,6 +325,8 @@ export function AdminPage({
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={adminTab === 'recent'}
             className={adminTab === 'recent' ? 'active' : ''}
             onClick={() => goToTab('recent')}
           >
@@ -278,15 +336,17 @@ export function AdminPage({
       ) : null}
 
       {canEdit && adminTab === 'tournament' ? (
-        <TournamentPanel
-          standings={standings}
-          saveRoundMatches={saveTournamentRound}
-          onFinished={() => {
-            setEditTournament(null)
-            goToTab('recent')
-          }}
-          openTournament={editTournament}
-        />
+        <Suspense fallback={<div className="load-banner">Loading tournament editor…</div>}>
+          <TournamentPanel
+            standings={standings}
+            saveRoundMatches={saveTournamentRound}
+            onFinished={() => {
+              setEditTournament(null)
+              goToTab('recent')
+            }}
+            openTournament={editTournament}
+          />
+        </Suspense>
       ) : null}
 
       {canEdit && adminTab === 'games' ? (
@@ -344,12 +404,14 @@ export function AdminPage({
                   <ScoreInput
                     id="match-score-a"
                     value={matchForm.scoreA}
+                    ariaLabel="Pair 1 score"
                     onChange={(value) => updateMatchForm({ scoreA: value })}
                   />
                 </AdminField>
                 <AdminField label="Pair 2 score">
                   <ScoreInput
                     value={matchForm.scoreB}
+                    ariaLabel="Pair 2 score"
                     onChange={(value) => updateMatchForm({ scoreB: value })}
                   />
                 </AdminField>
@@ -443,139 +505,119 @@ export function AdminPage({
           <div className="recent-games-weeks">
             {recentMatches.length === 0 ? (
               <p className="empty-table">No tournaments saved yet.</p>
+            ) : recentWeeks.length === 0 ? (
+              <p className="empty-table">No games found for that player.</p>
             ) : (
-              (() => {
-                const query = recentSearch.trim().toLowerCase()
-                const matchHasPlayer = (match: Match) =>
-                  !query ||
-                  [match.teamA[0], match.teamA[1], match.teamB[0], match.teamB[1]].some((id) =>
-                    (playerNameById.get(id) ?? '').toLowerCase().includes(query),
-                  )
-                const renderPlayerName = (id: string) => {
-                  const name = playerNameById.get(id) ?? '?'
-                  return query && name.toLowerCase().includes(query) ? (
-                    <mark className="recent-player-highlight">{name}</mark>
-                  ) : (
-                    name
-                  )
-                }
-
-                const weeks = new Map<string, Match[]>()
-                recentMatches.forEach((match) => {
-                  const list = weeks.get(match.week) ?? []
-                  list.push(match)
-                  weeks.set(match.week, list)
-                })
-
-                // Keep the full match list per week for "Edit Tournament" (which
-                // reopens the whole bracket), but only show the games that match
-                // the player filter.
-                const visibleWeeks = [...weeks.entries()]
-                  .map(([week, matches]) => ({ week, matches, games: matches.filter(matchHasPlayer) }))
-                  .filter((entry) => entry.games.length > 0)
-
-                if (visibleWeeks.length === 0) {
-                  return <p className="empty-table">No games found for that player.</p>
-                }
-
-                return visibleWeeks.map(({ week, matches, games }) => {
-                  // While filtering, keep matching weeks expanded so results are visible.
-                  const isOpen = query.length > 0 || expandedWeeks.has(week)
-                  return (
-                    <div className="week-subwindow" key={week}>
-                      <div className="week-subwindow-header-row">
-                        <button
-                          type="button"
-                          className="week-subwindow-header"
-                          onClick={() =>
-                            setExpandedWeeks((current) => {
-                              const next = new Set(current)
-                              if (next.has(week)) next.delete(week)
-                              else next.add(week)
-                              return next
-                            })
-                          }
-                        >
-                          <span className="week-title">{week}</span>
-                          <span className="week-count">
-                            {games.length} game{games.length === 1 ? '' : 's'}
-                          </span>
-                          {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button week-edit-button"
-                          onClick={() => openFullTournament(matches)}
-                        >
-                          <Pencil size={14} /> Edit Tournament
-                        </button>
-                      </div>
-                      {isOpen ? (
-                        <div className="table-wrap">
-                          <table className="recent-games-table">
-                            <thead>
-                              <tr>
-                                <th scope="col">Winners</th>
-                                <th scope="col">Losers</th>
-                                <th scope="col">Score</th>
-                                <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {games.map((match) => (
-                                <tr
-                                  key={match.id}
-                                  className={editingMatchId === match.id ? 'editing' : ''}
-                                >
-                                  <td>
-                                    {renderPlayerName(match.teamA[0])}
-                                    {' & '}
-                                    {renderPlayerName(match.teamA[1])}
-                                  </td>
-                                  <td>
-                                    {renderPlayerName(match.teamB[0])}
-                                    {' & '}
-                                    {renderPlayerName(match.teamB[1])}
-                                  </td>
-                                  <td>
-                                    <span className="score-badge">
-                                      {match.scoreA}-{match.scoreB}
-                                    </span>
-                                  </td>
-                                  <td style={{ textAlign: 'right' }}>
-                                    <div className="recent-match-actions">
-                                      <button
-                                        type="button"
-                                        className="icon-button"
-                                        aria-label="Edit game"
-                                        onClick={() => editRecentMatch(match)}
-                                      >
-                                        <Pencil size={16} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="icon-button danger"
-                                        aria-label="Delete game"
-                                        onClick={() => requestDeleteMatch(match.id)}
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
+              recentWeeks.map(({ week, matches, games }) => {
+                // While filtering, keep matching weeks expanded so results are visible.
+                const isOpen = recentQuery.length > 0 || expandedWeeks.has(week)
+                return (
+                  <div className="week-subwindow" key={week}>
+                    <div className="week-subwindow-header-row">
+                      <button
+                        type="button"
+                        className="week-subwindow-header"
+                        onClick={() =>
+                          setExpandedWeeks((current) => {
+                            const next = new Set(current)
+                            if (next.has(week)) next.delete(week)
+                            else next.add(week)
+                            return next
+                          })
+                        }
+                      >
+                        <span className="week-title">{week}</span>
+                        <span className="week-count">
+                          {games.length} game{games.length === 1 ? '' : 's'}
+                        </span>
+                        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button week-edit-button"
+                        onClick={() => openFullTournament(matches)}
+                      >
+                        <Pencil size={14} /> Edit Tournament
+                      </button>
                     </div>
-                  )
-                })
-              })()
+                    {isOpen ? (
+                      <div className="table-wrap">
+                        <table className="recent-games-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Winners</th>
+                              <th scope="col">Losers</th>
+                              <th scope="col">Score</th>
+                              <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {games.map((match) => (
+                              <tr
+                                key={match.id}
+                                className={editingMatchId === match.id ? 'editing' : ''}
+                              >
+                                <td>
+                                  {renderRecentPlayerName(match.teamA[0])}
+                                  {' & '}
+                                  {renderRecentPlayerName(match.teamA[1])}
+                                </td>
+                                <td>
+                                  {renderRecentPlayerName(match.teamB[0])}
+                                  {' & '}
+                                  {renderRecentPlayerName(match.teamB[1])}
+                                </td>
+                                <td>
+                                  <span className="score-badge">
+                                    {match.scoreA}-{match.scoreB}
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                  <div className="recent-match-actions">
+                                    <button
+                                      type="button"
+                                      className="icon-button"
+                                      aria-label="Edit game"
+                                      onClick={() => editRecentMatch(match)}
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="icon-button danger"
+                                      aria-label="Delete game"
+                                      onClick={() => requestDeleteMatch(match.id)}
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })
             )}
           </div>
+          {tournamentNotice ? (
+            <p className="form-error" role="alert" style={{ marginTop: 12 }}>
+              {tournamentNotice}
+            </p>
+          ) : null}
         </section>
       ) : null}
+      <ConfirmDialog
+        open={pendingTournament !== null}
+        title="Open tournament in full editor?"
+        message="Any tournament you have started but not finished will be replaced."
+        confirmLabel="Open editor"
+        onConfirm={() => void confirmOpenTournament()}
+        onCancel={() => setPendingTournament(null)}
+      />
     </section>
   )
 }

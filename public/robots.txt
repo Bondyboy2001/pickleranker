@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /manage
 
 Sitemap: https://dlpickle.pages.dev/sitemap.xml

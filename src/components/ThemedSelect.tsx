@@ -133,6 +133,7 @@ export function ThemedSelect({
         className="themed-select-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={listboxId}
         aria-label={ariaLabel}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={onButtonKeyDown}

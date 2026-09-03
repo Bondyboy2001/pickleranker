@@ -4,11 +4,14 @@ type PublicRoute = {
   page: 'public'
   tab: PublicTab
   playerId?: string
+  comparePlayerAId?: string
+  comparePlayerBId?: string
   week?: string
 }
 
 type AdminRoute = {
   page: 'admin'
+  tab?: 'games' | 'tournament' | 'recent'
 }
 
 export type AppRoute = PublicRoute | AdminRoute
@@ -18,6 +21,14 @@ const TAB_PATHS: Record<string, PublicTab> = {
   weekly: 'weekly',
   players: 'players',
   'how-4dr': 'how-4dr',
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 export function parseRoute(hash: string): AppRoute {
@@ -32,7 +43,11 @@ export function parsePathRoute(path: string, search = ''): AppRoute {
   const segments = pathPart.split('/').filter(Boolean)
 
   if (segments[0] === 'admin' || segments[0] === 'manage') {
-    return { page: 'admin' }
+    const tab = params.get('tab')
+    return {
+      page: 'admin',
+      ...(tab === 'tournament' || tab === 'recent' || tab === 'games' ? { tab } : {}),
+    } as AppRoute
   }
 
   const first = segments[0] ?? ''
@@ -42,7 +57,9 @@ export function parsePathRoute(path: string, search = ''): AppRoute {
     return {
       page: 'public',
       tab: 'players',
-      playerId: decodeURIComponent(segments[1]),
+      playerId: safeDecodeURIComponent(segments[1]),
+      comparePlayerAId: params.get('playerA') ?? undefined,
+      comparePlayerBId: params.get('playerB') ?? undefined,
     }
   }
 
@@ -51,6 +68,8 @@ export function parsePathRoute(path: string, search = ''): AppRoute {
       page: 'public',
       tab: 'players',
       playerId: params.get('player') ?? undefined,
+      comparePlayerAId: params.get('playerA') ?? undefined,
+      comparePlayerBId: params.get('playerB') ?? undefined,
     }
   }
 
@@ -68,17 +87,23 @@ export function parsePathRoute(path: string, search = ''): AppRoute {
 
 export function buildPublicRoute(
   tab: PublicTab,
-  options?: { playerId?: string; week?: string },
+  options?: {
+    playerId?: string
+    comparePlayerAId?: string
+    comparePlayerBId?: string
+    week?: string
+  },
 ): string {
   if (tab === 'overall') return '/'
   if (tab === 'how-4dr') return '/how-4dr'
 
   if (tab === 'players') {
-    if (options?.playerId) {
-      const params = new URLSearchParams({ player: options.playerId })
-      return `/players?${params.toString()}`
-    }
-    return '/players'
+    const params = new URLSearchParams()
+    if (options?.playerId) params.set('player', options.playerId)
+    if (options?.comparePlayerAId) params.set('playerA', options.comparePlayerAId)
+    if (options?.comparePlayerBId) params.set('playerB', options.comparePlayerBId)
+    const query = params.toString()
+    return query ? `/players?${query}` : '/players'
   }
 
   if (tab === 'weekly') {
@@ -92,16 +117,19 @@ export function buildPublicRoute(
   return '/'
 }
 
-export function buildAdminRoute() {
-  return '/manage'
+export function buildAdminRoute(tab?: 'games' | 'tournament' | 'recent') {
+  if (!tab || tab === 'games') return '/manage'
+  return `/manage?tab=${tab}`
 }
 
 export function navigateTo(route: AppRoute) {
   const nextUrl =
     route.page === 'admin'
-      ? buildAdminRoute()
+      ? buildAdminRoute(route.tab)
       : buildPublicRoute(route.tab, {
           playerId: route.playerId,
+          comparePlayerAId: route.comparePlayerAId,
+          comparePlayerBId: route.comparePlayerBId,
           week: route.week,
         })
   const currentUrl = `${window.location.pathname}${window.location.search}`

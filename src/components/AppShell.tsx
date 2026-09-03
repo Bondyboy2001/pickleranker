@@ -56,13 +56,14 @@ function AppHeaderBase({
             onLogoLongPress()
           }}
           aria-label="David Lloyd Cardiff Pickleball leaderboard home"
+          title="Home (right-click for admin)"
         >
           <Image
             className="brand-logo"
             src="/david-lloyd-pickleball-logo.png"
             alt="David Lloyd Clubs Pickleball"
-            width={640}
-            height={367}
+            width={256}
+            height={147}
             priority
           />
         </button>
@@ -146,10 +147,3 @@ function AppHeaderBase({
   )
 }
 
-export const AppFooter = memo(function AppFooter() {
-  return (
-    <footer className="app-footer">
-      <p>David Lloyd Cardiff Pickleball · 4DR leaderboard</p>
-    </footer>
-  )
-})

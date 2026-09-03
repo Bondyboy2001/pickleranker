@@ -1,0 +1,345 @@
+/* How-4DR rating explainer page. Split from App.css; import order in app/layout.tsx sets the cascade. */
+.rating-explainer-page {
+  margin: 18px 28px 0;
+  overflow: hidden;
+}
+
+.rating-explainer-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, var(--accent-soft), transparent 58%),
+    var(--surface);
+}
+
+.rating-explainer-hero h2 {
+  margin: 6px 0 8px;
+  color: var(--text-strong);
+  font-size: clamp(1.8rem, 3vw, 2.55rem);
+  line-height: 1.05;
+}
+
+.rating-explainer-hero p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.rating-explainer-baseline {
+  min-width: 150px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: right;
+}
+
+.rating-explainer-baseline span {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.rating-explainer-baseline strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent-strong);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.rating-explainer-content {
+  display: grid;
+  gap: 22px;
+  padding: 22px 28px 28px;
+}
+
+.explainer-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.explainer-feature-card,
+.explainer-panel,
+.explainer-example {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+
+.explainer-feature-card {
+  padding: 16px;
+}
+
+.explainer-feature-card span {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.explainer-panel,
+.explainer-example {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.78fr) minmax(0, 1.22fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.explainer-section h3 {
+  margin: 0 0 10px;
+  color: var(--text-strong);
+  font-size: 1.05rem;
+}
+
+.explainer-section p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.explainer-section p + p {
+  margin-top: 10px;
+}
+
+.explainer-rule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.explainer-rule-list div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.55fr) minmax(180px, 1fr);
+  gap: 6px 14px;
+  align-items: baseline;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.explainer-rule-list span,
+.explainer-example-grid span {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.explainer-rule-list strong,
+.explainer-example-grid strong {
+  color: var(--text-strong);
+  font-size: 18px;
+}
+
+.explainer-rule-list small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.explainer-card-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.explainer-example-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.explainer-example-grid div {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 42%);
+}
+
+.confirm-dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.primary-button.danger-button {
+  background: var(--danger);
+  color: #fff;
+}
+
+.local-admin-tools {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.local-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.weekly-search {
+  min-width: min(240px, 100%);
+}
+
+.leaderboard-table-wrap {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 680px) {
+  .dev-mode-banner,
+  .rating-explainer-page {
+    margin-inline: 14px;
+  }
+
+  .rating-explainer-hero,
+  .explainer-panel,
+  .explainer-example {
+    grid-template-columns: 1fr;
+  }
+
+  .rating-explainer-hero {
+    display: grid;
+    padding: 20px;
+  }
+
+  .rating-explainer-baseline {
+    text-align: left;
+  }
+
+  .rating-explainer-content {
+    padding: 18px;
+  }
+
+  .explainer-overview-grid,
+  .explainer-example-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .explainer-rule-list div {
+    grid-template-columns: 1fr;
+  }
+
+  .explainer-rule-list small {
+    grid-column: auto;
+  }
+
+  .weekly-heading {
+    flex-wrap: wrap;
+  }
+
+  .weekly-controls-panel {
+    order: 1;
+  }
+
+  .weekly-table-panel {
+    order: 2;
+  }
+
+  .weekly-workspace > .weekly-detail-panel {
+    order: 3;
+  }
+
+  .weekly-table-panel .table-wrap {
+    max-height: 360px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    transform: translateZ(0);
+    will-change: scroll-position;
+  }
+
+  .weekly-heading .week-select {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .weekly-search {
+    width: 100%;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  tbody tr,
+  .players-history-row {
+    transition: none;
+  }
+
+  tbody tr:hover,
+  .recent-games-table tbody tr:hover,
+  .players-history-row:hover {
+    background: inherit;
+    box-shadow: none;
+    transform: none;
+  }
+
+  tbody tr:hover > *,
+  tbody tr:focus-visible > *,
+  .players-history-row:hover td {
+    background: inherit;
+    box-shadow: none;
+  }
+
+  tbody tr.selected-row {
+    background: var(--selected-row);
+  }
+}
+

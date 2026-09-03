@@ -8,12 +8,25 @@ const TOURNAMENT_DRAFT_ID = 'default'
 // active-draft slot.
 const FINISHED_PREFIX = 'finished:'
 
+function isTournamentState(value: unknown): value is TournamentState {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.playedOn === 'string' &&
+    Array.isArray(v.playerIds) &&
+    Array.isArray(v.rounds) &&
+    v.playerIds.length <= 200 &&
+    v.rounds.length <= 50
+  )
+}
+
 function loadLocalTournament(): TournamentState | null {
   if (typeof localStorage === 'undefined') return null
   const stored = localStorage.getItem(TOURNAMENT_STORAGE_KEY)
   if (!stored) return null
   try {
-    return JSON.parse(stored) as TournamentState
+    const parsed = JSON.parse(stored)
+    return isTournamentState(parsed) ? parsed : null
   } catch {
     return null
   }
@@ -37,11 +50,7 @@ export async function loadRemoteTournament(): Promise<TournamentState | null> {
     .maybeSingle()
   if (error) return loadLocalTournament()
   if (!data?.data) return loadLocalTournament()
-  try {
-    return data.data as TournamentState
-  } catch {
-    return null
-  }
+  return isTournamentState(data.data) ? (data.data as TournamentState) : loadLocalTournament()
 }
 
 export async function saveRemoteTournament(tournament: TournamentState | null): Promise<void> {
@@ -92,13 +101,14 @@ export async function loadFinishedTournament(playedOn: string): Promise<Tourname
       .select('data')
       .eq('id', key)
       .maybeSingle()
-    if (!error && data?.data) return data.data as TournamentState
+    if (!error && isTournamentState(data?.data)) return data.data as TournamentState
   }
   if (typeof localStorage !== 'undefined') {
     const stored = localStorage.getItem(key)
     if (stored) {
       try {
-        return JSON.parse(stored) as TournamentState
+        const parsed = JSON.parse(stored)
+        return isTournamentState(parsed) ? parsed : null
       } catch {
         return null
       }

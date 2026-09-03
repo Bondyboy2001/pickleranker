@@ -41,10 +41,14 @@ Copy `.env.example` to `.env.local` and fill in your Supabase project values.
 
 1. Create a Supabase project and open the SQL Editor.
 2. Run `supabase/schema.sql`.
-3. For an existing project, also run `supabase/migration-2026-06-12.sql` for match
-   edit timestamps and shared tournament drafts.
-4. Create the admin user (email `ben@pickleranker.local`) under Authentication → Users,
-   then register its UUID:
+3. For an existing project, also run `supabase/migration-2026-06-12.sql` (match
+   edit timestamps and shared tournament drafts),
+   `supabase/migration-2026-06-17.sql` (round/court), and
+   `supabase/migration-2026-09-03.sql` (score cap, name bounds,
+   `source` column, `weekly_snapshots`, draft size limit).
+4. In Supabase Auth settings: disable public signup and require a 12+ char
+   password. Create admin users under Authentication → Users, then register
+   each UUID:
 
    ```sql
    insert into public.admin_users (user_id, email)
@@ -73,15 +77,14 @@ files — no server runtime.
 ### Option 2: Wrangler CLI
 
 ```bash
-npm run build
-npx wrangler pages deploy out --project-name=dlpickle --branch=main
+npm run deploy   # builds, then uploads out/ to the dlpickle project (main)
 ```
 
-### Manual Deploy After Building
+Equivalent to running the two steps by hand:
 
 ```bash
 npm run build
-# Upload the 'out/' directory via Cloudflare dashboard or wrangler
+npx wrangler pages deploy out --project-name=dlpickle --branch=main
 ```
 
 ## Tests

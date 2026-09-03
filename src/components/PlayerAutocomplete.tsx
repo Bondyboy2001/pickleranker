@@ -24,6 +24,57 @@ type PlayerSearchAutocompleteProps = {
   className?: string
 }
 
+function useHighlightNavigation(suggestionCount: number) {
+  const [open, setOpen] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(0)
+
+  function moveHighlight(direction: 1 | -1) {
+    setOpen(true)
+    setHighlightIndex((index) =>
+      direction === 1
+        ? Math.min(index + 1, Math.max(suggestionCount - 1, 0))
+        : Math.max(index - 1, 0),
+    )
+  }
+
+  function resetHighlight() {
+    setHighlightIndex(0)
+  }
+
+  return { open, setOpen, highlightIndex, setHighlightIndex, moveHighlight, resetHighlight }
+}
+
+function useDismissOnOutsideClick(
+  open: boolean,
+  onDismiss: () => void,
+  inputRef: React.RefObject<HTMLElement | null>,
+  listRef: React.RefObject<HTMLElement | null>,
+) {
+  const onDismissRef = useRef(onDismiss)
+  onDismissRef.current = onDismiss
+  useEffect(() => {
+    if (!open) return
+    function onClick(event: MouseEvent) {
+      const target = event.target as Node
+      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        onDismissRef.current()
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open, inputRef, listRef])
+}
+
+function filterPlayersByQuery(players: AutocompletePlayer[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase()
+  return players
+    .filter(
+      (player) =>
+        normalizedQuery === '' || player.name.toLowerCase().includes(normalizedQuery),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export function PlayerAutocomplete({
   players,
   value,
@@ -35,8 +86,6 @@ export function PlayerAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [draftQuery, setDraftQuery] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  const [highlightIndex, setHighlightIndex] = useState(0)
 
   const selectedName = useMemo(
     () => players.find((player) => player.id === value)?.name ?? '',
@@ -54,12 +103,14 @@ export function PlayerAutocomplete({
       )
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [players, value, excludeIds, query])
+  const { open, setOpen, highlightIndex, setHighlightIndex, moveHighlight, resetHighlight } =
+    useHighlightNavigation(suggestions.length)
 
   function selectPlayer(playerId: string) {
     onChange(playerId)
     setDraftQuery(null)
     setOpen(false)
-    setHighlightIndex(0)
+    resetHighlight()
   }
 
   function resetDraft() {
@@ -70,13 +121,12 @@ export function PlayerAutocomplete({
   function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setOpen(true)
-      setHighlightIndex((index) => Math.min(index + 1, Math.max(suggestions.length - 1, 0)))
+      moveHighlight(1)
       return
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault()
-      setHighlightIndex((index) => Math.max(index - 1, 0))
+      moveHighlight(-1)
       return
     }
     if (event.key === 'Enter') {
@@ -90,17 +140,7 @@ export function PlayerAutocomplete({
     }
   }
 
-  useEffect(() => {
-    if (!open) return
-    function onClick(event: MouseEvent) {
-      const target = event.target as Node
-      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) {
-        resetDraft()
-      }
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
+  useDismissOnOutsideClick(open, resetDraft, inputRef, listRef)
 
   return (
     <div className="player-autocomplete">
@@ -165,36 +205,31 @@ export function PlayerSearchAutocomplete({
   const listId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const [highlightIndex, setHighlightIndex] = useState(0)
 
-  const suggestions = useMemo(() => {
-    const normalizedQuery = value.trim().toLowerCase()
-    return players
-      .filter(
-        (player) =>
-          normalizedQuery === '' || player.name.toLowerCase().includes(normalizedQuery),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [players, value])
+  const suggestions = useMemo(() => filterPlayersByQuery(players, value), [players, value])
+  const { open, setOpen, highlightIndex, setHighlightIndex, moveHighlight, resetHighlight } =
+    useHighlightNavigation(suggestions.length)
 
   function selectPlayer(player: AutocompletePlayer) {
     onChange(player.name)
     onSelect?.(player.id)
     setOpen(false)
-    setHighlightIndex(0)
+    resetHighlight()
+  }
+
+  function dismiss() {
+    setOpen(false)
   }
 
   function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setOpen(true)
-      setHighlightIndex((index) => Math.min(index + 1, Math.max(suggestions.length - 1, 0)))
+      moveHighlight(1)
       return
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault()
-      setHighlightIndex((index) => Math.max(index - 1, 0))
+      moveHighlight(-1)
       return
     }
     if (event.key === 'Enter') {
@@ -209,17 +244,7 @@ export function PlayerSearchAutocomplete({
     }
   }
 
-  useEffect(() => {
-    if (!open) return
-    function onClick(event: MouseEvent) {
-      const target = event.target as Node
-      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
+  useDismissOnOutsideClick(open, dismiss, inputRef, listRef)
 
   return (
     <div className={`player-autocomplete ${className}`.trim()}>

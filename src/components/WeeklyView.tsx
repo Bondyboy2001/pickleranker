@@ -80,6 +80,7 @@ function WeeklyViewBase({
 
   return (
     <div className="weekly-workspace">
+      <h1 className="visually-hidden">Weekly pickleball results in Cardiff</h1>
       <div className="weekly-main-column">
       <section className="panel weekly-panel weekly-controls-panel">
         <div className="panel-heading weekly-heading">
@@ -144,14 +145,14 @@ function WeeklyViewBase({
                   title="Current doubles rating"
                 />
                 <SortableHeader
-                  label="4DR +/-"
+                  label="4DR change"
                   sortKey="weeklyChange"
                   activeSort={weeklySort}
                   onSort={onToggleWeeklySort}
                   title="4DR change this week"
                 />
                 <SortableHeader
-                  label="Rank Difference"
+                  label="Rank movement"
                   sortKey="rankMovement"
                   activeSort={weeklySort}
                   onSort={onToggleWeeklySort}
@@ -169,6 +170,9 @@ function WeeklyViewBase({
                       effectiveWeeklyPlayerId === player.playerId ? 'selected-row' : ''
                     }
                     tabIndex={0}
+                    role="button"
+                    aria-pressed={effectiveWeeklyPlayerId === player.playerId}
+                    aria-label={`View ${player.name} weekly details`}
                     onClick={() => selectWeeklyPlayer(player.playerId)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -181,19 +185,19 @@ function WeeklyViewBase({
                     <td className="weekly-player-cell">
                       <strong>{player.name}</strong>
                       <span>
-                        {player.games} game{player.games === 1 ? '' : 's'} | point{' '}
+                        {player.games} game{player.games === 1 ? '' : 's'} · point diff.{' '}
                         {pointDifference >= 0 ? '+' : ''}
                         {pointDifference}
                       </span>
                     </td>
                     <td className="rating-cell">{formatRating(player.rating)}</td>
-                    <td data-label="4DR +/-">
+                    <td data-label="4DR change">
                       <span className={movementClass(player.change)}>
                         {player.change >= 0 ? '+' : ''}
                         {player.change.toFixed(3)}
                       </span>
                     </td>
-                    <td data-label="Rank Difference">
+                    <td data-label="Rank movement">
                       <span className={movementClass(player.rankMovement)}>
                         {player.rankMovement >= 0 ? '+' : ''}
                         {player.rankMovement}
@@ -325,9 +329,9 @@ function WeeklyGameStatsCard({ game }: { game: WeeklyPlayerGame }) {
       const next = !open
       if (next) {
         // Scroll the whole card into view (score header included), not just the
-        // details, so the entire breakdown is visible after expanding.
+        // details, using nearest to avoid jarring full-page jumps.
         requestAnimationFrame(() => {
-          cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
         })
       }
       return next

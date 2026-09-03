@@ -1,0 +1,187 @@
+/* Skip link, sync status, sticky bar, motion prefs. Split from App.css; import order in app/layout.tsx sets the cascade. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 10px 14px;
+  background: var(--accent-strong);
+  color: var(--surface);
+  border-radius: 8px;
+}
+
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+}
+
+.brand-logo-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.topbar {
+  flex-wrap: wrap;
+}
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0 28px 12px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sync-dot.live {
+  background: var(--accent-strong);
+}
+
+.sync-dot.syncing {
+  animation: sync-pulse 1s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.sticky-player-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0 28px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.sticky-player-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sticky-player-dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.leaderboard-row {
+  cursor: default;
+}
+
+.rank-movement {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: fit-content;
+  margin-top: 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.rank-movement.up {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.rank-movement.down {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.leaderboard-row.pinned-row {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+
+.weekly-details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.head-to-head-games {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.head-to-head-games li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 680px) {
+  .sticky-player-bar {
+    display: flex;
+    margin-inline: 14px;
+  }
+
+  .sync-status {
+    margin-inline: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-dot.syncing {
+    animation: none;
+  }
+}

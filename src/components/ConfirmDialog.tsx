@@ -20,16 +20,38 @@ export function ConfirmDialog({
   onCancel: () => void
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const previousFocus = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
-    confirmRef.current?.focus()
+    previousFocus.current = document.activeElement as HTMLElement | null
+    // For destructive actions focus Cancel by default to avoid accidental confirm.
+    const target = danger ? cancelRef.current : confirmRef.current
+    target?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onCancel()
+      // Simple focus trap: keep Tab inside the dialog.
+      if (event.key === 'Tab') {
+        const focusables = [cancelRef.current, confirmRef.current].filter(Boolean) as HTMLElement[]
+        if (focusables.length === 0) return
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first.focus()
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onCancel])
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      previousFocus.current?.focus?.()
+    }
+  }, [open, onCancel, danger])
 
   if (!open) return null
 
@@ -45,7 +67,7 @@ export function ConfirmDialog({
         <h3 id="confirm-title">{title}</h3>
         <p id="confirm-message">{message}</p>
         <div className="confirm-actions">
-          <button type="button" className="ghost-button" onClick={onCancel}>
+          <button ref={cancelRef} type="button" className="ghost-button" onClick={onCancel}>
             {cancelLabel}
           </button>
           <button

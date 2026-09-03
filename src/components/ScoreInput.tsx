@@ -35,12 +35,11 @@ export function ScoreInput({
       <button
         type="button"
         className="score-stepper-button"
-        aria-label="Decrease score"
-        aria-hidden={readOnly || disabled}
+        aria-label={ariaLabel ? `${ariaLabel}: decrease` : 'Decrease score'}
         onClick={() => step(-1)}
         disabled={!canStep || currentValue <= min}
       >
-        <Minus size={18} />
+        <Minus size={18} aria-hidden />
       </button>
       <input
         id={id}
@@ -60,12 +59,11 @@ export function ScoreInput({
       <button
         type="button"
         className="score-stepper-button"
-        aria-label="Increase score"
-        aria-hidden={readOnly || disabled}
+        aria-label={ariaLabel ? `${ariaLabel}: increase` : 'Increase score'}
         onClick={() => step(1)}
         disabled={!canStep}
       >
-        <Plus size={18} />
+        <Plus size={18} aria-hidden />
       </button>
     </div>
   )
