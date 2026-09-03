@@ -8,53 +8,55 @@
 
 .view-tabs {
   display: inline-flex;
-  gap: 0;
+  gap: 8px;
   padding: 0;
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--segment-border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  border: 0;
+  background: transparent;
 }
 
 .view-tabs button,
 .view-tabs a {
-  min-width: 132px;
-  height: 52px;
-  padding: 0 22px;
-  border: 0;
-  border-right: 1px solid var(--segment-border);
-  border-radius: 0;
-  background: transparent;
-  color: var(--segment-idle-text);
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 28px;
+  border: 1px solid var(--segment-border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  transition: background-color 180ms ease, color 180ms ease;
+  white-space: nowrap;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .view-tabs button:last-child,
 .view-tabs a:last-child {
-  border-right: 0;
+  border: 1px solid var(--segment-border);
 }
 
 .view-tabs button:hover:not(.active),
 .view-tabs a:hover:not(.active) {
+  border-color: var(--pine);
   background: var(--surface-alt);
   color: var(--text-strong);
 }
 
 .view-tabs button.active,
 .view-tabs a.active {
+  border-color: var(--pine);
   background: var(--pine);
   color: var(--pine-text);
-  font-weight: 700;
-  box-shadow: none;
+  font-weight: 800;
+  box-shadow: 0 2px 10px rgba(46, 75, 62, 0.28);
 }
 
 .header-tabs {
@@ -71,14 +73,14 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  min-height: 44px;
-  padding: 0 13px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  min-height: var(--control-height);
+  padding: 0 28px;
+  border: 1px solid var(--segment-border);
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text-strong);
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 16px;
+  font-weight: 800;
   list-style: none;
   cursor: pointer;
   box-shadow: var(--shadow-soft);

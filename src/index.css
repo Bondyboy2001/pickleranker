@@ -25,7 +25,7 @@
   --focus: rgba(26, 107, 79, 0.22);
   --table-inset: 18px;
   /* Control language: one height + pill radius shared by buttons, search, filters, selects. */
-  --control-height: 44px;
+  --control-height: 52px;
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-pill: 999px;
@@ -71,7 +71,7 @@
   --shadow-soft: 0 6px 22px rgba(0, 0, 0, 0.22);
   --focus: rgba(184, 232, 116, 0.26);
   /* Same pine-filled controls in dark mode: white text on pine stays AAA. */
-  --control-height: 44px;
+  --control-height: 52px;
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-pill: 999px;

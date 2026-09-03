@@ -30,13 +30,13 @@
   justify-content: center;
   height: var(--control-height);
   min-height: var(--control-height);
-  padding: 0 22px;
-  border: 1px solid var(--border-strong);
+  padding: 0 28px;
+  border: 1px solid var(--segment-border);
   border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -45,7 +45,7 @@
 }
 
 .minimum-games-filter button:last-child {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--segment-border);
 }
 
 .minimum-games-filter button:hover:not(.active) {
@@ -595,12 +595,13 @@ tbody tr.selected-row {
 
 .score-stepper {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  grid-template-columns: var(--control-height) minmax(0, 1fr) var(--control-height);
   align-items: stretch;
-  min-height: 56px;
+  min-height: var(--control-height);
+  height: var(--control-height);
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   background: var(--surface-elevated);
   color: var(--text-strong);
 }
@@ -620,7 +621,7 @@ tbody tr.selected-row {
   background: transparent;
   box-shadow: none;
   color: var(--text-strong);
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 800;
   text-align: center;
   outline: none;
@@ -684,7 +685,7 @@ tbody tr.selected-row {
 }
 
 .add-player-form {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--control-height);
   align-items: flex-end;
 }
 
@@ -749,10 +750,10 @@ select:focus {
   gap: 8px;
   min-height: var(--control-height);
   height: var(--control-height);
-  padding: 0 22px;
+  padding: 0 28px;
   border-radius: var(--radius-pill);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1;
   cursor: pointer;
   transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease,
@@ -787,7 +788,7 @@ select:focus {
 
 .ghost-button,
 .icon-button {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--segment-border);
   background: var(--surface);
   color: var(--text);
 }
@@ -1487,19 +1488,22 @@ select:focus {
   .view-tabs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
     width: 100%;
-    overflow: hidden;
+    overflow: visible;
+    border: 0;
+    background: transparent;
   }
 
   .view-tabs button,
   .view-tabs a {
     min-width: 0;
-    height: 44px;
+    height: var(--control-height);
     padding: 0 10px;
-    border-right: 1px solid var(--segment-border);
-    border-bottom: 1px solid var(--segment-border);
+    border: 1px solid var(--segment-border);
+    border-radius: var(--radius-pill);
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 800;
     line-height: 1.15;
     white-space: normal;
   }
@@ -1508,12 +1512,22 @@ select:focus {
   .view-tabs a:nth-child(2n),
   .view-tabs button:last-child,
   .view-tabs a:last-child {
-    border-right: 0;
+    border: 1px solid var(--segment-border);
+  }
+
+  .view-tabs button.active,
+  .view-tabs a.active {
+    border-color: var(--pine);
   }
 
   .view-tabs button:nth-last-child(-n + 2),
   .view-tabs a:nth-last-child(-n + 2) {
-    border-bottom: 0;
+    border-bottom: 1px solid var(--segment-border);
+  }
+
+  .view-tabs button.active:nth-last-child(-n + 2),
+  .view-tabs a.active:nth-last-child(-n + 2) {
+    border-color: var(--pine);
   }
 
   .topbar-actions .ghost-link,

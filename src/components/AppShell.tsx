@@ -68,6 +68,13 @@ function AppHeaderBase({
           />
         </button>
         <HeaderClock />
+        {!isAdminPage ? (
+          <SyncStatus
+            lastSyncedAt={lastSyncedAt}
+            isLoading={isLoading}
+            hasVisibleData={hasVisibleData}
+          />
+        ) : null}
       </div>
       <div className="topbar-actions">
         {!isAdminPage ? (
@@ -136,13 +143,6 @@ function AppHeaderBase({
           {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
       </div>
-      {!isAdminPage ? (
-        <SyncStatus
-          lastSyncedAt={lastSyncedAt}
-          isLoading={isLoading}
-          hasVisibleData={hasVisibleData}
-        />
-      ) : null}
     </header>
   )
 }

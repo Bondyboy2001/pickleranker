@@ -59,6 +59,32 @@
   font-weight: 700;
 }
 
+/* Sync status sits to the right of the clock, separated by a divider. */
+.brand-lockup .sync-status {
+  width: auto;
+  margin: 0;
+  padding: 0 0 0 18px;
+  border-left: 1px solid var(--border);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.brand-lockup .sync-status > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .brand-lockup .sync-status {
+    margin: 0;
+    padding-left: 0;
+    border-left: 0;
+    font-size: 12px;
+    white-space: normal;
+  }
+}
+
 @media (max-width: 640px) {
   .header-clock {
     display: none;
@@ -282,14 +308,14 @@ td span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 0 20px;
-  border: 1px solid var(--border);
+  min-height: var(--control-height);
+  padding: 0 28px;
+  border: 1px solid var(--segment-border);
   border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   text-decoration: none;
   box-shadow: var(--shadow-soft);
 }
@@ -304,9 +330,9 @@ td span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--border);
+  width: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid var(--segment-border);
   border-radius: 50%;
   background: var(--surface);
   color: var(--accent-strong);

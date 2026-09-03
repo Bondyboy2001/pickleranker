@@ -62,6 +62,12 @@ const DEMO_PLAYERS = Array.from({ length: 15 }, (_, index) => ({
 }))
 const DEMO_PLAYER_IDS = new Set(DEMO_PLAYERS.map((player) => player.id))
 
+// Venue default and picker bounds for the setup-screen court stepper. The
+// picker is deliberately independent of the roster so courts can be set before
+// players are added; createTournament clamps to the roster on generate.
+const DEFAULT_SETUP_COURTS = 4
+const MAX_SETUP_COURTS = 12
+
 const DEMO_SCORES: Array<[string, string]> = [
   ['11', '7'],
   ['9', '11'],
@@ -397,8 +403,10 @@ export function TournamentPanel({
   const [tournament, setTournament] = useState<TournamentState | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [playedOn, setPlayedOn] = useState(() => new Date().toISOString().slice(0, 10))
-  // Courts available at the venue. Null means "as many as the roster fills".
-  const [courtCount, setCourtCount] = useState<number | null>(null)
+  // Courts available at the venue. Defaults to 4; the organiser can change it
+  // before the roster is complete, so the setup picker is NOT clamped to the
+  // roster (createTournament clamps to the roster on generate).
+  const [courtCount, setCourtCount] = useState<number | null>(DEFAULT_SETUP_COURTS)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [activeRoundIndex, setActiveRoundIndex] = useState(0)
@@ -485,11 +493,12 @@ export function TournamentPanel({
     [selectedIds, standings],
   )
 
-  // Courts for the setup screen. Null = auto (as many courts as the roster
-  // fills); a picked value sticks but is clamped when the roster shrinks.
-  const maxSetupCourts = defaultCourtCount(seededSelection.length)
+  // Courts for the setup screen. Venue default is 4, adjustable 1..12 even
+  // with no roster yet — clamped to the roster only when generating.
   const setupCourts =
-    courtCount === null ? maxSetupCourts : clampCourtCount(courtCount, seededSelection.length)
+    courtCount === null
+      ? DEFAULT_SETUP_COURTS
+      : Math.min(Math.max(1, Math.floor(courtCount)), MAX_SETUP_COURTS)
 
   function togglePlayer(playerId: string) {
     setFormError('')
@@ -520,7 +529,7 @@ export function TournamentPanel({
     setTournamentLoaded(true)
     setIsDemoTournament(false)
     setTournament(createTournament(seededSelection, playedOn, Math.random, setupCourts))
-    setCourtCount(null)
+    setCourtCount(DEFAULT_SETUP_COURTS)
   }
 
   function loadDemoTournament() {
@@ -869,7 +878,7 @@ export function TournamentPanel({
     setEditLineups(false)
     setIsDemoTournament(false)
     setTournamentNotice('')
-    setCourtCount(null)
+    setCourtCount(DEFAULT_SETUP_COURTS)
     onFinished?.()
   }
 
@@ -912,7 +921,7 @@ export function TournamentPanel({
     setFormError('')
     setIsDemoTournament(false)
     setTournamentNotice('')
-    setCourtCount(null)
+    setCourtCount(DEFAULT_SETUP_COURTS)
   }
 
   if (!tournament) {
@@ -941,9 +950,10 @@ export function TournamentPanel({
               min={1}
               ariaLabel="Courts available"
               onChange={(value) => {
+                if (value === '') return
                 const next = Number(value.replace(/\D/g, ''))
-                if (!Number.isFinite(next) || value === '') return
-                setCourtCount(clampCourtCount(next, seededSelection.length))
+                if (!Number.isFinite(next)) return
+                setCourtCount(Math.min(Math.max(1, Math.floor(next)), MAX_SETUP_COURTS))
               }}
             />
           </AdminField>
