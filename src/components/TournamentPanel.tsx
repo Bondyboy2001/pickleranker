@@ -929,17 +929,6 @@ export function TournamentPanel({
 
     return (
       <section className="panel tournament-panel tournament-setup">
-        <div className="tournament-hero">
-          <div className="tournament-hero-copy">
-            <span className="tournament-hero-icon" aria-hidden>
-              <Trophy size={22} />
-            </span>
-            <div>
-              <h2>Tournament setup</h2>
-            </div>
-          </div>
-        </div>
-
         <div className="tournament-setup-grid">
           <AdminField label="Date">
             <DatePicker value={playedOn} onChange={(value) => setPlayedOn(value)} />
