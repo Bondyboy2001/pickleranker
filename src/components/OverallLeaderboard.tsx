@@ -220,7 +220,7 @@ function OverallLeaderboardBase({
             <CalendarDays size={28} />
           </span>
           <div>
-            <span>Latest match</span>
+            <span>Latest tournament</span>
             <strong>{lastUpdated}</strong>
             <small>{matchCount} saved games</small>
           </div>
